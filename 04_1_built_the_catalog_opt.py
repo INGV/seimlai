@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jul 29 09:10:01 2025
+
+@author: rossella.fonzetti
+"""
+
+#################################################################################
+# This script uses GaMMA associator (Zhu et al., 2022) to associate picks to a single event
+# A raw seismic catalog  and associated picks file will be provided.
+################################################################################
+
+#import libraries
+import obspy
+from obspy.clients.fdsn import Client
+from obspy import UTCDateTime
+from obspy.core.utcdatetime import UTCDateTime
+from obspy.signal.filter import bandpass
+from obspy.geodetics import gps2dist_azimuth
+from pyproj import CRS, Transformer
+import pandas as pd
+import numpy as np
+from collections import Counter
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import seaborn as sns
+import torch
+import math
+import os
+import warnings
+import re
+import pygmt
+
+from gamma.utils import association
+import seisbench.models as sbm
+
+sns.set(font_scale=1.2)
+sns.set_style("ticks")
+
+
+if __name__ == "__main__":
+    # SET VARIABLES
+    year=2016
+    dayini=294
+    dayfin=306
+    base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
+    # Define output directory
+    output_dir = f"{base_dir}/output/output_catalog"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    
+    # SET GaMMA PARAMETERS
+    # Define coordinate systems 
+    wgs84 = CRS.from_epsg(4326)  # Latitude/Longitude
+    utm33n = CRS.from_epsg(32633)  # UTM zone 33N (only for Central Italy)
+    transformer = Transformer.from_crs(wgs84, utm33n, always_xy=True)
+    
+    # Gamma
+    config = {}
+    # The seismic catalog has km coordinate as outuput data
+    config["dims"] = ['x(km)', 'y(km)', 'z(km)']
+    config["use_dbscan"] = True
+    config["use_amplitude"] = False
+    config["x(km)"] = (250, 600)
+    config["y(km)"] = (4100, 5000)
+    config["z(km)"] = (0, 150)
+    config["vel"] = {"p": 7.0, "s": 7.0 / 1.75}  # We assume rather high velocities as we expect deeper events
+    config["method"] = "BGMM"
+    if config["method"] == "BGMM":
+        config["oversample_factor"] = 4
+    if config["method"] == "GMM":
+        config["oversample_factor"] = 1
+    
+    # DBSCAN
+    config["bfgs_bounds"] = (
+        (config["x(km)"][0] - 1, config["x(km)"][1] + 1),  # x
+        (config["y(km)"][0] - 1, config["y(km)"][1] + 1),  # y
+        (0, config["z(km)"][1] + 1),  # x
+        (None, None),  # t
+    )
+    #config["dbscan_eps"] = estimate_eps(stations, config["vel"]["p"]) 
+    config["dbscan_eps"] = 25  # seconds
+    config["dbscan_min_samples"] = 3
+    
+    ## using Eikonal for 1D velocity model
+    zz = [0.0, 5.5, 16.0, 32.0]
+    vp = [5.5, 5.5,  6.7,  7.8]
+    vp_vs_ratio = 1.73
+    vs = [v / vp_vs_ratio for v in vp]
+    h = 1.0
+    vel = {"z": zz, "p": vp, "s": vs}
+    config["eikonal"] = {"vel": vel, "h": h, "xlim": config["x(km)"], "ylim": config["y(km)"], "zlim": config["z(km)"]}
+    
+    # Filtering
+    config["min_picks_per_eq"] = 6
+    config["min_p_picks_per_eq"] = 4
+    config["min_s_picks_per_eq"] = 3
+    config["max_sigma11"] = 1.5 # second
+    config["max_sigma22"] = 1.0 # log10(m/s)
+    config["max_sigma12"] = 1.0 # covariance
+    
+    
+    #FUNCTIONS TO READ STATION FILE AND CONVERT COORDINATES
+    def process_stations(file_path):
+        stations_df = pd.read_csv(file_path)
+        
+        # Coordinate Conversion in UTM 33N
+        stations_df["x(km)"], stations_df["y(km)"] = zip(
+            *stations_df.apply(lambda row: transformer.transform(row["longitude"], row["latitude"]), axis=1)
+        )
+        # km conversion
+        stations_df["x(km)"] /= 1e3
+        stations_df["y(km)"] /= 1e3  
+    
+        return stations_df
+    
+    
+    # UPLOAD PICKS FILE
+    sorted_file = f"{base_dir}/output/output_picks_08-08/{dayini}_{dayfin}_{year}_picks_sort.csv"
+    picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
+    # Estract nework and station name
+    #picks_df["Network"] = picks_df["Station"].str.split(".").str[0]  # Es. "IV.INTR." -> "IV"
+    picks_df["Station"] = picks_df["Station"].str.split(".").str[-2]  # Es. "IV.INTR." -> "INTR"
+    
+    # Change network and station columns position
+    picks_df = picks_df[["Julian_Day", "Station", "Datetime", "Probability", "Wave_Type"]]
+    
+    # Dataframe creation
+    pick_df = []
+    for _, row in picks_df.iterrows():
+        pick_df.append({
+            "id": row['Station'], #Station Name
+            "timestamp": row["Datetime"], # Arrival time
+            "prob": row["Probability"],  # PhaseNet probability
+            "type": row["Wave_Type"].lower() # waves type (p or s)
+        })
+    pick_df = pd.DataFrame(pick_df)
+    
+    #UPLOAD STATIONS FILE
+    stations_df = process_stations(f"{base_dir}/stations.csv")
+    stations_df["elevation"] = pd.to_numeric(stations_df["elevation"], errors="coerce")
+    
+    station_df = pd.DataFrame({
+        "id": stations_df["station"],
+        "longitude": stations_df["longitude"],
+        "latitude": stations_df["latitude"],
+        "elevation(m)": stations_df["elevation"],
+        "x(km)": stations_df["x(km)"],
+        "y(km)": stations_df["y(km)"],
+        "z(km)": -stations_df["elevation"] / 1000  
+    })
+    
+    #RUN GaMMA ASSOCIATOR
+    os.environ["PYTHONWARNINGS"] = "ignore"
+    warnings.filterwarnings("ignore")
+    catalogs, assignments = association(pick_df, station_df, config, method=config["method"])
+    catalog = pd.DataFrame(catalogs)
+    assignments = pd.DataFrame(assignments, columns=["pick_idx", "event_idx", "prob_gamma"])
+    
+    # SAVE Raw CATALOG with km coordinates
+    catalog_file_in=os.path.join(output_dir,f"seismic_catalog_{year}_{dayini}_{dayfin}.csv")
+    catalog.to_csv(catalog_file_in, index=False)
+    
+    # Save picks 
+    assignments["pick_idx"] = assignments["pick_idx"].astype(int)
+    assignments["event_idx"] = assignments["event_idx"].astype(int)   
+    if pick_df.index.dtype != 'int64':
+        pick_df = pick_df.reset_index()   
+    missing_picks = set(pick_df.index) - set(assignments["pick_idx"])
+    if missing_picks:
+        print(f"Warning {len(missing_picks)} pick_idx not find in assignments!")  
+    picks_with_events = pick_df.merge(assignments, left_index=True, right_on="pick_idx", how="left")
+    picks_with_events["event_idx"] = picks_with_events["event_idx"].fillna(-1).astype(int)  
+    picks_with_events = picks_with_events.merge(catalog, left_on="event_idx", right_on="event_index", how="left") 
+    missing_events = set(picks_with_events["event_idx"]) - set(catalog["event_index"])
+    if missing_events:
+        print(f"Warning: {len(missing_events)} event_idx not match into the catalog!")
+    picks_with_events.drop(columns=["event_index"], inplace=True, errors="ignore")
+    picks_with_events = picks_with_events[["id", "timestamp", "prob", "type", "event_idx", "prob_gamma"]]
+    # Save all picks (the id .-1 is referred to un-associated picks)
+    output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{dayini}_{dayfin}.csv")
+    picks_with_events.to_csv(output_gamma_picks, index=False)
+    
+    print(f"Picks save in {output_gamma_picks}!")
+    
+    # --------------------------------------
+    # Save only associated picks
+    gamma_picks = picks_with_events.copy()
+    associated_picks = gamma_picks[gamma_picks["event_idx"] != -1].copy()
+    associated_picks = associated_picks.sort_values(by=["event_idx", "timestamp"])
+    output_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{dayini}_{dayfin}.csv")
+    associated_picks.to_csv(output_associated_picks, index=False)
+    
+    print(f"Associated picks saved in {output_associated_picks}!")
+    
+    #CONVERT FROM km to ° COORDINATES 
+    transformer_inv = Transformer.from_crs(utm33n, wgs84, always_xy=True) 
+    x_col = "x(km)" if "x(km)" in catalog.columns else "x"
+    y_col = "y(km)" if "y(km)" in catalog.columns else "y"
+    lon_lat = [transformer_inv.transform(x * 1e3, y * 1e3) for x, y in zip(catalog[x_col], catalog[y_col])]
+    catalog["longitude"] = [coord[0] for coord in lon_lat]
+    catalog["latitude"] = [coord[1] for coord in lon_lat]
+    
+    # Delate km coordinate from dataframe and put the degree coordinate.
+    catalog = catalog.drop(columns=[x_col, y_col])
+    catalog_file=os.path.join(output_dir,f"seismic_catalog_with_latlon_{year}_{dayini}_{dayfin}.csv")
+    #Save catalog with correct coordinates
+    catalog.to_csv(catalog_file, index=False)
+    print("Seismic catalog saved in seismic_catalog_with_latlon.csv con solo longitude e latitude.")
+    
+    # Use PyGMT to plot the seismicity
+    os.environ["GMT_LIBRARY_PATH"] = "/Applications/gmt-6.5.0-darwin-arm64/GMT-6.5.0.app/Contents/Resources/lib/"
+    pygmt.config(GMT_VERBOSE="q")
+    # 1. Central Italy range
+    region = [12.5, 14.00, 42.00, 43.50]
+    
+    # 2. Figure
+    fig = pygmt.Figure()
+    
+    # 3. Topography Colormap 
+    pygmt.makecpt(cmap="gray", series=[-1000, 3000,1], truncate="0.4/1.0",continuous=True)
+    
+    # 4. Topography with realistic shading
+    fig.grdimage(
+        grid="/Users/rossella.fonzetti/WORK/TOPO/italy_srtm.grd",  # your grd file or @
+        region=region,
+        projection="M6i",
+        shading="+a135+nt0.6",
+        cmap=True,
+        frame=["af", '+t"Central Italy - 2016/10/30 Seismicity"']
+    )
+    
+    # 5. Coastlines 
+    fig.coast(shorelines="1/0.25p,black", resolution="h")
+    
+    # 6. Depth colormap (continuous viridis)
+    pygmt.makecpt(
+        cmap="viridis",
+        series=[catalog["z(km)"].min(), catalog["z(km)"].max(),1],
+        continuous=True
+    )
+    
+    # 7. Plot earthquakes (viridis, no black outline)
+    fig.plot(
+        x=catalog["longitude"],
+        y=catalog["latitude"],
+        style="c0.06c",
+        fill=catalog["z(km)"],
+        cmap=True,
+        pen=False,            
+        transparency=20
+    )
+    
+    # 8. Seismic stations
+    fig.plot(
+        x=station_df["longitude"],
+        y=station_df["latitude"],
+        style="t0.25c",
+        fill="red",
+        pen="black"
+    )
+    
+    # 9. Depth colorbar (below the map)
+    fig.colorbar(
+        position="JBC+o2.0c/1.4c+w8c/0.4c+h",  # bottom center, offset vertical -1.4c
+        frame='af+l"Depth (km)"'
+    )
+    
+    # 10. Topography colorbar (top right) — [commented out]
+    #fig.colorbar(
+    #    position="JTR+o-1.8c/0c+w0.3c/3c+v",  # verticale
+    #    frame='af+l"Elevation (m)"'
+    #)
+    
+    # 11. Scale bar (50 km, bottom left)
+    fig.basemap(map_scale="jBL+o0.3c/-1.5c+w10k+f+l")
+    
+    # 12. Inset map of Italy centered on the Apennines
+    with fig.inset(position="jTR+w3.5c+o0.3c", box="+gwhite+p1p,black"):
+        fig.coast(
+            region=[8, 17, 40.5, 47],
+            projection="M3.5c",
+            land="gray85",
+            water="white",
+            shorelines="0.25p,black"
+        )
+        rect = [
+            [region[0], region[2]],
+            [region[1], region[2]],
+            [region[1], region[3]],
+            [region[0], region[3]],
+            [region[0], region[2]],
+        ]
+        fig.plot(data=rect, pen="1p,red")
+    
+    # Save plot 
+    output_file = os.path.join(output_dir, f"catalog_{year}_{dayini}_{dayfin}.pdf")
+    fig.savefig(output_file, dpi=300)
+    
+    # Show the plot
+    fig.show()

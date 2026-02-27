@@ -1,0 +1,339 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# Picks P- and S- wave arrival times for each stations. 
+# Uses PhaseNet with Seisbench.
+# Optimized to handle channel hierarchy (HH > EH > BH) and non-standard components (1, 2).
+
+# import libraries
+import os
+import gc
+import time
+import re
+import math
+from obspy import read, Stream, Trace, UTCDateTime
+from seisbench.models import PhaseNet
+import pandas as pd
+import torch
+import matplotlib.pyplot as plt 
+import matplotlib.dates as mdates 
+import matplotlib.gridspec as gridspec
+
+# --- CONFIGURAZIONE DEVICE (GPU/MPS/CPU) ---
+print("GPU available:", torch.cuda.is_available())
+if torch.backends.mps.is_available():
+    device = torch.device("mps")
+    device_name = "MPS (Apple Silicon GPU)"
+elif torch.cuda.is_available():
+    device = torch.device("cuda")
+    device_name = torch.cuda.get_device_name(0)
+else:
+    device = torch.device("cpu")
+    device_name = "CPU"
+    
+print(f"Device selected: {device_name}")
+print("MPS available:", torch.backends.mps.is_available())
+print("CUDA available:", torch.cuda.is_available())
+
+
+# --- CARICAMENTO MODELLO ---
+# MODEL TRASFER LEARNING
+####### IF YOU HAVE A TRAINING MODEL #######
+#MODEL FOCAL LOSS AQ2009
+#model_path='/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_20250630_235651_/model_weights_25.pth'
+#model_path='/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_PN_80_epochs_2048_bs_0.0001_lr_std_norm.AQ2009_focalloss_20250627_150139_/model_weights_80.pth'
+#MODEL CROSS ENTROPHY AQ2009
+model_path= "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_EP41_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"
+#MODEL TRASFER LEARNING
+#model_path="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_20250627_143934_/model_weights_60.pth"
+
+
+# UPLOAD CHECKPOINT
+try:
+    checkpoint = torch.load(model_path, map_location="cpu")
+    model = PhaseNet()
+    model.labels = "PSN"
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.to(device)
+    print(f"Model loaded successfully from: {model_path}")
+except Exception as e:
+    print(f"ERROR loading model: {e}")
+    print("Please check the model_path variable.")
+    exit()
+
+# --- PARAMETRI GENERALI ---
+case_study_name = "Amatrice_catalog"
+base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/"
+year = 2016
+#end_day=305
+start_day, end_day = 294,296
+
+# LUNGHEZZA DELLA FINESTRA DI VISUALIZZAZIONE PER SUBPLOT (in secondi)
+WLENGTH_SECONDS = 900  # 30 min
+
+# --- SETUP DIRECTORIES ---
+waveform_base = os.path.join(base_dir, case_study_name, "waveforms", str(year))
+output_base = os.path.join(base_dir, case_study_name, "output")
+summary_dir = os.path.join(output_base, "output_picks")
+plot_dir = os.path.join(output_base, "plots_annotations", f"{year}_{start_day:03d}_{end_day:03d}")
+log_file_path = os.path.join(output_base, "phase_picking_log.txt")
+
+os.makedirs(summary_dir, exist_ok=True)
+os.makedirs(plot_dir, exist_ok=True) 
+
+# --- LOGGING ---
+log_file = open(log_file_path, "w")
+log_file.write(f"PhaseNet Picking Log - Year: {year}, Days: {start_day} to {end_day}\n")
+log_file.write(f"Plotting segment length (WLENGTH_SECONDS): {WLENGTH_SECONDS} seconds\n")
+log_file.write("Hierarchy applied: HH > EH > BH\n")
+log_file.write("="*60 + "\n")
+
+# Start timing
+overall_start_time = time.time()
+
+# --- MAIN LOOP ---
+for day in range(start_day, end_day + 1):
+    log_file.write(f"Processing day: {day}\n")
+    print(f"Processing day: {day}")
+    daily_csv = os.path.join(summary_dir, f"picks_{year}_{day:03d}.csv")
+    if os.path.exists(daily_csv):
+        os.remove(daily_csv)
+
+    if not os.path.exists(waveform_base):
+        print(f"Waveform directory not found: {waveform_base}")
+        continue
+
+    for net in sorted(os.listdir(waveform_base)):
+        net_path = os.path.join(waveform_base, net)
+        if not os.path.isdir(net_path):
+            continue
+
+        print(f"Network: {net}")
+        log_file.write(f"Network: {net}\n")
+
+        for stat in sorted(os.listdir(net_path)):
+            stat_path = os.path.join(net_path, stat)
+            if not os.path.isdir(stat_path):
+                continue
+
+            print(f"Processing station: {stat}")
+            log_file.write(f"Station: {stat}\n")
+            stream = Stream()
+
+            # =================================================================
+            # === MODIFICA: SELEZIONE GERARCHICA CANALI (HH > EH > BH) ===
+            # =================================================================
+            # 1. Scansioniamo tutte le cartelle .D disponibili per questa stazione
+            all_subdirs = [d for d in os.listdir(stat_path) if d.endswith(".D")]
+            
+            # 2. Raggruppiamo per componente (Z, N, E, 1, 2)
+            #    candidates = { 'Z': [(priorità, nome_cartella), ...], '1': ... }
+            candidates = {}
+            
+            for subdir in all_subdirs:
+                try:
+                    # Estraiamo il codice canale (es. "HHZ" da "HHZ.D" o "IV.STA..HHZ.D")
+                    chan_code = subdir.split(".")[-2] 
+                    if len(chan_code) < 3: continue
+                    
+                    band_inst = chan_code[:2] # es. "HH", "BH", "EH"
+                    component = chan_code[2]  # es. "Z", "N", "E", "1", "2"
+                    
+                    # Assegniamo priorità: 0=HH (migliore), 1=EH, 2=BH, 99=Altro
+                    if band_inst == "HH": priority = 0
+                    elif band_inst == "EH": priority = 1
+                    elif band_inst == "BH": priority = 2
+                    else: priority = 99
+                    
+                    if component not in candidates:
+                        candidates[component] = []
+                    candidates[component].append((priority, subdir))
+                    
+                except Exception as e:
+                    print(f"Skipping subdir parsing {subdir}: {e}")
+
+            # 3. Selezioniamo SOLO la cartella migliore per ogni componente
+            selected_subdirs = []
+            for comp, subdir_list in candidates.items():
+                # Ordina per priorità (numero più basso vince)
+                subdir_list.sort(key=lambda x: x[0])
+                best_subdir = subdir_list[0][1] 
+                selected_subdirs.append(best_subdir)
+
+            # 4. Leggiamo SOLO le cartelle selezionate
+            for subdir in selected_subdirs:
+                full_path = os.path.join(stat_path, subdir)
+                if os.path.isdir(full_path):
+                    for fname in os.listdir(full_path):
+                        try:
+                            match = re.match(r".*\.(\d{4})\.(\d{3})$", fname)
+                            if match:
+                                file_year, file_day = int(match.group(1)), int(match.group(2))
+                                if file_year == year and file_day == day:
+                                    stream += read(os.path.join(full_path, fname))
+                        except Exception as e:
+                            print(f"Error reading {fname}: {e}")
+                            log_file.write(f"Error reading {fname}: {e}\n")
+            
+            # =================================================================
+            # === FINE SELEZIONE GERARCHICA ===
+            # =================================================================
+
+            log_file.write(f"    Stream traces loaded: {len(stream)}\n")
+
+            if len(stream) < 3:
+                print("Skipped: Not enough components (needs 3)")
+                log_file.write("Skipped: Not enough components\n")
+                continue
+
+            try:
+                log_file.write("    Running model.annotate()...\n")
+                annotations = model.annotate(stream)
+                
+                log_file.write("    Running model.classify()...\n")
+                classified = model.classify(stream, batch_size=256, P_threshold=0.9, S_threshold=0.9)
+                outputs = classified.picks
+                log_file.write("    Classification complete.\n")
+                
+                # --- PLOTTING SECTION (SOLO Z + PROBABILITÀ) ---
+                z_trace = next((trace for trace in stream if trace.stats.channel.endswith('Z')), None)
+                
+                if z_trace is not None and z_trace.stats.endtime - z_trace.stats.starttime > 0:
+                    
+                    start_time = z_trace.stats.starttime
+                    end_time = z_trace.stats.endtime
+                    duration = end_time - start_time
+                    
+                    num_segments = math.ceil(duration / WLENGTH_SECONDS)
+                    N_rows = num_segments * 2
+                    
+                    fig_height = num_segments * 3.5 
+                    fig = plt.figure(figsize=(15, fig_height))
+                    
+                    height_ratios = [3, 1] * num_segments
+                    gs = fig.add_gridspec(N_rows, 1, hspace=0.01, height_ratios=height_ratios) 
+                    
+                    print(f"    Generating plot with {num_segments} segments...")
+
+                    # Liste per la legenda unica
+                    all_handles = []
+                    all_labels = []
+                    
+                    for i in range(num_segments):
+                        window_start = start_time + i * WLENGTH_SECONDS
+                        window_end = min(start_time + (i + 1) * WLENGTH_SECONDS, end_time)
+                        
+                        if window_end <= window_start:
+                            break
+                        
+                        sliced_trace = z_trace.slice(window_start, window_end)
+                        sliced_annotations = annotations.slice(window_start, window_end)
+                        
+                        if len(sliced_trace.data) == 0:
+                            continue
+                        
+                        # --- 1. Plot Traccia Sismica (Z) ---
+                        ax_trace = fig.add_subplot(gs[2*i, 0]) 
+                        
+                        if i < num_segments - 1:
+                            ax_trace.tick_params(axis='x', labelbottom=False)
+                        
+                        max_abs_data = max(abs(sliced_trace.data)) if len(sliced_trace.data) > 0 else 1
+                        normalized_data = sliced_trace.data / max_abs_data
+                        
+                        label_norm = f"Norm. {sliced_trace.stats.channel}" if i == 0 else ""
+                        ax_trace.plot(sliced_trace.times(), normalized_data, color='k', label=label_norm) 
+                    
+                        ax_trace.set_ylabel(f"Norm. {sliced_trace.stats.channel}\n({window_start.strftime('%H:%M')})", fontsize=8)
+                        ax_trace.tick_params(axis='x', labelbottom=False)
+                        if i == 0:
+                            ax_trace.set_title(f"Picks for {net}.{stat} - Day {day:03d}")
+                        
+                        # Raccogli legenda
+                        if i == 0:
+                            h, l = ax_trace.get_legend_handles_labels()
+                            all_handles.extend(h)
+                            all_labels.extend(l)
+                        
+                        ax_trace.tick_params(axis='y', length=0)
+                        ax_trace.set_yticks([]) 
+                        ax_trace.set_xlim(0, WLENGTH_SECONDS)
+
+                        # --- 2. Plot Probabilità ---
+                        ax_preds = fig.add_subplot(gs[2*i + 1, 0])
+                        ax_preds.set_xlim(ax_trace.get_xlim())
+
+                        colors = {"P": "C0", "S": "C1", "N": "C2"}
+                        
+                        for trace in sliced_annotations:
+                            phase = trace.stats.channel.split('_')[-1] 
+                            if phase in colors:
+                                label = f"Prob. {phase}" if i == 0 else ''
+                                ax_preds.plot(trace.times(), trace.data, color=colors[phase], label=label)
+
+                        ax_preds.set_ylabel("Prob.", fontsize=8)
+                        ax_preds.set_ylim(0, 1)
+
+                        if i == 0:
+                            h, l = ax_preds.get_legend_handles_labels()
+                            all_handles.extend(h)
+                            all_labels.extend(l)
+                            
+                        if i == num_segments - 1:
+                            ax_preds.set_xlabel("Time [s]") 
+                        else:
+                            ax_preds.tick_params(axis='x', labelbottom=False)
+                        
+                        ax_preds.tick_params(axis='y', length=0)
+                        ax_preds.set_yticks([0, 0.5, 1]) 
+                    
+                    # Legenda Unica
+                    unique_legend = dict(zip(all_labels, all_handles))
+                    fig.legend(unique_legend.values(), unique_legend.keys(), loc='upper center', ncol=6, bbox_to_anchor=(0.5, 0.99))
+                    
+                    figure_filename = os.path.join(plot_dir, f"{net}_{stat}_{year}_{day:03d}_FULL_Z_annotations.pdf")
+                    plt.savefig(figure_filename, bbox_inches='tight', format='pdf', dpi=300) 
+                    plt.close(fig) 
+                    log_file.write(f"    Plot saved: {figure_filename}\n")
+
+                # --- SALVATAGGIO CSV ---
+                pick_df = []
+                for p in outputs:
+                    pick_df.append({
+                        "station": stat,
+                        "id": p.trace_id,
+                        "timestamp": p.peak_time.datetime,
+                        "prob": p.peak_value,
+                        "type": p.phase.lower()
+                    })
+                pick_df = pd.DataFrame(pick_df)
+                
+                # Append to CSV
+                pick_df.to_csv(daily_csv, mode='a', index=False, header=not os.path.exists(daily_csv))
+                log_file.write(f"    Picks saved: {len(pick_df)}\n")
+
+            except Exception as e:
+                print(f"Error on {stat}: {e}")
+                log_file.write(f"Error on {stat}: {e}\n")
+
+            del stream, annotations, classified, outputs
+            gc.collect() 
+
+    # Sort CSV at the end of the day
+    try:
+        if os.path.exists(daily_csv):
+            df = pd.read_csv(daily_csv)
+            if not df.empty:
+                df = df.sort_values("timestamp")
+                df.to_csv(daily_csv, index=False)
+                log_file.write(f"Daily CSV sorted: {daily_csv}\n")
+    except Exception as e:
+        log_file.write(f"Error sorting daily CSV: {e}\n")
+
+# End timing
+overall_end_time = time.time()
+total_duration = overall_end_time - overall_start_time
+print(f"Total picking time: {total_duration:.2f} seconds")
+log_file.write("="*60 + "\n")
+log_file.write(f"Total picking time: {total_duration:.2f} seconds\n")
+log_file.close()
