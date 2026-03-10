@@ -25,38 +25,16 @@ from datetime import timedelta, datetime
 # Nuove librerie per il parallelismo
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from config import *
 
-# === config parameters ===
-case_study_name = "Amatrice_catalog"
-base_dir = os.path.join(os.getcwd(), case_study_name)
-root_dir = os.path.join(base_dir, "waveforms")
-inventory_dir = os.path.join(base_dir, "inventory")
-log_file_path = os.path.join(base_dir, "download_log.txt")
-
+# === Create directories ===
 os.makedirs(root_dir, exist_ok=True)
 os.makedirs(inventory_dir, exist_ok=True)
-
-network = "YR"  # all the network
-channel = "BH?,HH?,EH?"     # channel type
-# Lista esatta delle stazioni YR da scaricare
-stations_list = "ED01,ED02,ED03,ED04,ED05,ED06,ED07,ED08,ED09,ED10,ED11,ED12,ED14,ED15,ED16,ED17,ED18,ED19,ED20,ED21,ED22,ED23,ED24,ED25"
-minlatitude = 42.25
-maxlatitude = 43.12
-minlongitude = 11.75
-maxlongitude = 14.00
-
-# Time interval
-starttime = UTCDateTime("2016-11-01")
-endtime = UTCDateTime("2016-11-10")
-
-# === define client ===
-#fdsn_clients = [Client("INGV"), Client("IRIS")]
-fdsn_clients = [Client("IRIS")]
 
 station_metadata = []
 
 # === Open log file & Lock ===
-log_file = open(log_file_path, "w")
+log_file = open(download_log_path, "w")
 # Il lock serve a evitare che due processi scrivano nel file nello stesso istante
 io_lock = threading.Lock()
 
@@ -124,11 +102,9 @@ log(f"=== Download started at {overall_start.strftime('%Y-%m-%d %H:%M:%S')} ==="
 current_time = starttime
 one_day_seconds = 24 * 60 * 60
 
-while current_time < endtime:
+while current_time <= endtime:
     t0 = current_time
     t1 = current_time + one_day_seconds
-    if t1 > endtime:
-        t1 = endtime
 
     log(f"\n>> Downloading from {t0.date} to {t1.date}")
 
@@ -219,9 +195,9 @@ while current_time < endtime:
     # Incrementiamo di un giorno
     current_time += one_day_seconds
 
-
+print(base_dir)
 # === Save station metadata to CSV ===
-csv_path = os.path.join(base_dir, "stations.csv")
+csv_path = os.path.join(case_study_dir, "stations.csv")
 if station_metadata:
     fieldnames = list(station_metadata[0].keys())
     with open(csv_path, "w", newline="") as f:
@@ -293,7 +269,7 @@ if candidates:
         plt.legend()
         plt.grid()
         plt.tight_layout()
-        plot_path = os.path.join(base_dir, f"waveform_plot_{sta}.pdf")
+        plot_path = os.path.join(case_study_dir, f"waveform_plot_{sta}.pdf")
         plt.savefig(plot_path, format='pdf', dpi=300)
         log(f"Plot saved to: {plot_path}")
         # plt.show() # Decommenta se sei in Spyder/Jupyter interattivo
