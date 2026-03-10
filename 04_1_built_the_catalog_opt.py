@@ -28,25 +28,25 @@ import seaborn as sns
 import torch
 import math
 import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 import warnings
-import re
-import pygmt
-
+from pyproj import CRS, Transformer
 from gamma.utils import association
-import seisbench.models as sbm
 
 sns.set(font_scale=1.2)
 sns.set_style("ticks")
 
+from config import *
 
 if __name__ == "__main__":
-    # SET VARIABLES
-    year=2016
-    dayini=294
-    dayfin=306
-    base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
+    # SET VARIABLES FROM CONFIG
+    dayini = start_day
+    dayfin = end_day
     # Define output directory
-    output_dir = f"{base_dir}/output/output_catalog"
+    output_dir = os.path.join(output_base, "output_catalog")
     os.makedirs(output_dir, exist_ok=True)
     
     
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     
     
     # UPLOAD PICKS FILE
-    sorted_file = f"{base_dir}/output/output_picks_08-08/{dayini}_{dayfin}_{year}_picks_sort.csv"
+    sorted_file = os.path.join(output_picks_dir, f"{dayini}_{dayfin}_{year}_picks_sort.csv")
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
     # Estract nework and station name
     #picks_df["Network"] = picks_df["Station"].str.split(".").str[0]  # Es. "IV.INTR." -> "IV"
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     pick_df = pd.DataFrame(pick_df)
     
     #UPLOAD STATIONS FILE
-    stations_df = process_stations(f"{base_dir}/stations.csv")
+    stations_df = process_stations(os.path.join(case_study_dir, "stations.csv"))
     stations_df["elevation"] = pd.to_numeric(stations_df["elevation"], errors="coerce")
     
     station_df = pd.DataFrame({
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     print("Seismic catalog saved in seismic_catalog_with_latlon.csv con solo longitude e latitude.")
     
     # Use PyGMT to plot the seismicity
-    os.environ["GMT_LIBRARY_PATH"] = "/Applications/gmt-6.5.0-darwin-arm64/GMT-6.5.0.app/Contents/Resources/lib/"
+    os.environ["GMT_LIBRARY_PATH"] = "/opt/homebrew/lib/"
     pygmt.config(GMT_VERBOSE="q")
     # 1. Central Italy range
     region = [12.5, 14.00, 42.00, 43.50]

@@ -11,11 +11,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import re
+from config import *
 
-# --- CONFIGURATION (User Defined) ---
-#MODEL_TESTED='pretraining_instance'
-BASE_DIRECTORY = f"/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/output"
-FILE_NAME = "294_306_2016_picks_sort.csv"
+# --- CONFIGURATION ---
+# MODEL_TESTED='pretraining_instance'
+BASE_DIRECTORY = output_base
+FILE_NAME = f"{start_day}_{end_day}_{year}_picks_sort.csv"
 LOG_FILE = "analysis_log.txt"
 SINGLE_PDF_FILE = "combined_analysis_report.pdf"
 
@@ -116,7 +117,7 @@ def analyze_data_by_threshold():
     # --- DATA COLLECTION LOOP ---
     for root, dirs, files in os.walk(BASE_DIRECTORY):
         
-        if os.path.basename(root).startswith('output_picks_'):
+        if os.path.basename(root).startswith('output_picks'):
             
             dir_name = os.path.basename(root)
             # Use regex to robustly extract the threshold number from the directory name

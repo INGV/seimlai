@@ -7,12 +7,13 @@ Created on Tue Jul 29 10:25:28 2025
 """
 
 
+import os
 import pandas as pd
+from config import *
 
 ## SORT PICKING ##
-def sort_seismic_picking(input_file, output_file):
-    # Read picks file
-    df = pd.read_csv(input_file)
+def sort_seismic_picking(df, output_file):
+    # Rename columns
 
     # Rename columns
     df = df.rename(columns={
@@ -40,13 +41,26 @@ def sort_seismic_picking(input_file, output_file):
 
     print(f"File ordinato salvato come: {output_file}")
 
-## Parameters
-dayini = "304"
-dayfin = "304"
-year = "2016"
-base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/NEW_GAMMA_CONFIGURATION/2016_2017_SEQUENCE/output/output_picks"
 
-inputfile = f"{base_dir}/picks_{year}_{dayini}.csv"
-outputfile = f"{base_dir}/{dayini}_{dayfin}_{year}_picks_sort.csv"
+all_dfs = []
 
-sort_seismic_picking(inputfile, outputfile)
+for day in range(start_day, end_day + 1):
+    inputfile = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
+    if os.path.exists(inputfile):
+        print(f"Reading file: {inputfile}")
+        df = pd.read_csv(inputfile)
+        all_dfs.append(df)
+    else:
+        print(f"Warning: File not found for day {day}: {inputfile}")
+
+if all_dfs:
+    # Concatenate all dataframes
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    
+    # Define output file
+    outputfile = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
+    
+    # Run sorting and saving
+    sort_seismic_picking(combined_df, outputfile)
+else:
+    print("No pick files found to process.")

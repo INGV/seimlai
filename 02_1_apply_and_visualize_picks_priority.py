@@ -18,67 +18,15 @@ import torch
 import matplotlib.pyplot as plt 
 import matplotlib.dates as mdates 
 import matplotlib.gridspec as gridspec
+from config import *
 
-# --- CONFIGURAZIONE DEVICE (GPU/MPS/CPU) ---
-print("GPU available:", torch.cuda.is_available())
-if torch.backends.mps.is_available():
-    device = torch.device("mps")
-    device_name = "MPS (Apple Silicon GPU)"
-elif torch.cuda.is_available():
-    device = torch.device("cuda")
-    device_name = torch.cuda.get_device_name(0)
-else:
-    device = torch.device("cpu")
-    device_name = "CPU"
-    
-print(f"Device selected: {device_name}")
-print("MPS available:", torch.backends.mps.is_available())
-print("CUDA available:", torch.cuda.is_available())
+# --- CONFIGURAZIONE DEVICE & MODELLO ---
+# device, device_name e model sono importati da config.py
+print(f"Using {device_name} for processing.")
+print(f"Model loaded and ready on {device}")
 
 
-# --- CARICAMENTO MODELLO ---
-# MODEL TRASFER LEARNING
-####### IF YOU HAVE A TRAINING MODEL #######
-#MODEL FOCAL LOSS AQ2009
-#model_path='/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_20250630_235651_/model_weights_25.pth'
-#model_path='/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_PN_80_epochs_2048_bs_0.0001_lr_std_norm.AQ2009_focalloss_20250627_150139_/model_weights_80.pth'
-#MODEL CROSS ENTROPHY AQ2009
-model_path= "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_EP41_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"
-#MODEL TRASFER LEARNING
-#model_path="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_20250627_143934_/model_weights_60.pth"
-
-
-# UPLOAD CHECKPOINT
-try:
-    checkpoint = torch.load(model_path, map_location="cpu")
-    model = PhaseNet()
-    model.labels = "PSN"
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model.to(device)
-    print(f"Model loaded successfully from: {model_path}")
-except Exception as e:
-    print(f"ERROR loading model: {e}")
-    print("Please check the model_path variable.")
-    exit()
-
-# --- PARAMETRI GENERALI ---
-case_study_name = "Amatrice_catalog"
-base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/"
-year = 2016
-#end_day=305
-start_day, end_day = 294,296
-
-# LUNGHEZZA DELLA FINESTRA DI VISUALIZZAZIONE PER SUBPLOT (in secondi)
-WLENGTH_SECONDS = 900  # 30 min
-
-# --- SETUP DIRECTORIES ---
-waveform_base = os.path.join(base_dir, case_study_name, "waveforms", str(year))
-output_base = os.path.join(base_dir, case_study_name, "output")
-summary_dir = os.path.join(output_base, "output_picks")
-plot_dir = os.path.join(output_base, "plots_annotations", f"{year}_{start_day:03d}_{end_day:03d}")
-log_file_path = os.path.join(output_base, "phase_picking_log.txt")
-
-os.makedirs(summary_dir, exist_ok=True)
+os.makedirs(output_picks_dir, exist_ok=True)
 os.makedirs(plot_dir, exist_ok=True) 
 
 # --- LOGGING ---
@@ -95,7 +43,7 @@ overall_start_time = time.time()
 for day in range(start_day, end_day + 1):
     log_file.write(f"Processing day: {day}\n")
     print(f"Processing day: {day}")
-    daily_csv = os.path.join(summary_dir, f"picks_{year}_{day:03d}.csv")
+    daily_csv = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
     if os.path.exists(daily_csv):
         os.remove(daily_csv)
 
@@ -191,7 +139,7 @@ for day in range(start_day, end_day + 1):
                 annotations = model.annotate(stream)
                 
                 log_file.write("    Running model.classify()...\n")
-                classified = model.classify(stream, batch_size=256, P_threshold=0.9, S_threshold=0.9)
+                classified = model.classify(stream, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
                 outputs = classified.picks
                 log_file.write("    Classification complete.\n")
                 
@@ -261,7 +209,7 @@ for day in range(start_day, end_day + 1):
 
                         # --- 2. Plot Probabilità ---
                         ax_preds = fig.add_subplot(gs[2*i + 1, 0])
-                        ax_preds.set_xlim(ax_trace.get_xlim())
+                        ax_preds.set_xlim(ax_trace.get_xlim())                        
 
                         colors = {"P": "C0", "S": "C1", "N": "C2"}
                         
