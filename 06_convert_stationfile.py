@@ -12,6 +12,7 @@ Created on Thu Aug  7 09:54:47 2025
 
 import pandas as pd
 import os
+from config import *
 
 def dec_to_degmin(dec_deg, is_lat=True):
     """
@@ -24,12 +25,10 @@ def dec_to_degmin(dec_deg, is_lat=True):
     return f"{abs(degrees):02d}{direction}{minutes:05.2f}"
 
 # Load the CSV file
-base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PRETRAINED_ORIGINAL"
-df = pd.read_csv(f"{base_dir}/stations.csv")
+df = pd.read_csv(os.path.join(case_study_dir, station_file_name))
 
 # Create output directory if it doesn't exist
-output_dir = f"{base_dir}/output/output_catalog/filtered_data"
-os.makedirs(output_dir, exist_ok=True)
+os.makedirs(h71_filtered_dir, exist_ok=True)
 
 # List to store output lines
 lines = []
@@ -76,7 +75,7 @@ for _, row in df.iterrows():
     lines.append(line2)
 
 # Save to file
-output_path = f"{output_dir}/all.he"
+output_path = os.path.join(h71_filtered_dir, "all.he")
 with open(output_path, "w") as f:
     for line in lines:
         f.write(line + "\n")

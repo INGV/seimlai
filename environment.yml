@@ -1,0 +1,22 @@
+# conda env create -f environment.yml to create the environment
+# conda activate seismology_catalog to activate the environment
+# conda deactivate to deactivate the environment
+name: seismology_catalog
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - obspy
+  - pygmt
+  - gmt
+  - ghostscript
+  - pandas
+  - numpy
+  - matplotlib
+  - seaborn
+  - pyproj
+  - pytorch
+  - pip:
+      - gamma-utils

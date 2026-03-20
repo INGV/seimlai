@@ -8,26 +8,16 @@ Created on Thu Nov 13 10:47:52 2025
 # --- 1. Importare le librerie necessarie ---
 import pandas as pd  # Per leggere e analizzare il file CSV
 import os          # Per gestire i percorsi delle cartelle e dei file
+from config import *
 
-# --- 2. Definizione dei percorsi ---
+# --- 2. Definizione dei percorsi (derived from config.py) ---
 
-# Questo è il percorso esatto della cartella in cui si trova il file
-# Come hai richiesto tu:
-base_path = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_4096_bs_0.0001_lr_std_norm.AQ2009_transferlearning_focalloss_20250627_143520_/output/output_catalog"
+# Input file name built from config variables (year, start_day, end_day)
+nome_file_input = f"gamma_pick_{year}_{start_day}_{end_day}.csv"
 
-# Definiamo il nome del file di input
-nome_file_input = "gamma_pick_2016_294_306.csv"
-
-# Definiamo il nome del file di log che vogliamo creare
-nome_file_log = "analisi_picking.log"
-
-# Usiamo os.path.join per costruire i percorsi completi in modo sicuro.
-# Questo crea: "/Users/.../output_catalog/gamma_pick_2016_304_304.csv"
-input_file_path = os.path.join(base_path, nome_file_input)
-
-# Questo crea: "/Users/.../output_catalog/analisi_picking.log"
-# Il log verrà salvato NELLA STESSA CARTELLA dell'input.
-log_file_path = os.path.join(base_path, nome_file_log)
+# Build full paths using output_dir from config.py
+input_file_path = os.path.join(output_dir, nome_file_input)
+log_file_path = os.path.join(output_dir, analysis_log_filename)
 
 # --- 3. Stampa di controllo (per te) ---
 print(f"Sto per leggere il file da:\n{input_file_path}\n")
