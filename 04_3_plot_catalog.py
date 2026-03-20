@@ -1,20 +1,23 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Nov 13 10:47:52 2025
+
+@author: rossella.fonzetti
+"""
+import os
+from config import *
+
+# Set GMT library path before importing pygmt
+if GMT_LIBRARY_PATH:
+    os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
+
 import pygmt
 import pandas as pd
-import os
 
-# Configurazione percorsi
-year, dayini, dayfin = 2016, 294, 306
-base_dir = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
-#output_dir = f"{base_dir}/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_/output/output_catalog_09-09"
-#output_dir="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_/output/output_catalog_09-09"
-#output_dir = f"{base_dir}/EP_41_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_/output/output_catalog_09-09"
-#output_dir="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_/output_03P_02S_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_/output_catalog/"
-output_dir="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_4096_bs_0.0001_lr_std_norm.AQ2009_transferlearning_focalloss_20250627_143520_/output/output_catalog/"
-topo_grid = "/Users/rossella.fonzetti/WORK/TOPO/italy_srtm.grd"
-
-# Caricamento dati salvati dallo script precedente
-catalog_file = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{dayini}_{dayfin}.csv")
-stations_file = os.path.join(output_dir, "stations_processed.csv")
+# --- Derived paths from config.py ---
+catalog_file = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+stations_file = os.path.join(case_study_dir, "stations.csv")
 
 if not os.path.exists(catalog_file):
     print(f"Errore: Il file {catalog_file} non esiste. Esegui prima lo script di elaborazione.")
@@ -24,9 +27,7 @@ catalog = pd.read_csv(catalog_file)
 station_df = pd.read_csv(stations_file)
 
 # --- Inizio Plotting PyGMT ---
-os.environ["GMT_LIBRARY_PATH"] = "/Applications/gmt-6.5.0-darwin-arm64/GMT-6.5.0.app/Contents/Resources/lib/"
 pygmt.config(GMT_VERBOSE="q")
-region = [12.5, 14.00, 42.00, 43.50]
 
 fig = pygmt.Figure()
 
@@ -38,14 +39,13 @@ pygmt.makecpt(
     continuous=True
 )
 
-
 fig.grdimage(
-    grid=topo_grid,
-    region=region,
+    grid=GMT_GRID_PATH,
+    region=plot_region,
     projection="M6i",
     shading="+a135+nt0.6",
     cmap=True,
-    frame=["af", '+t"Central Italy - 2016/10/30 Seismicity"']
+    frame=["af", f'+t"{plot_map_title}"']
 )
 
 fig.coast(shorelines="1/0.25p,black", resolution="h")
@@ -63,7 +63,7 @@ fig.plot(
     style="c0.06c",
     fill=catalog["z(km)"],
     cmap=True,
-    pen=False,            
+    pen=False,
     transparency=20
 )
 
@@ -82,11 +82,17 @@ fig.basemap(map_scale="jBL+o0.3c/-1.5c+w10k+f+l")
 # Inset Italy
 with fig.inset(position="jTR+w3.5c+o0.3c", box="+gwhite+p1p,black"):
     fig.coast(region=[8, 17, 40.5, 47], projection="M3.5c", land="gray85", water="white", shorelines="0.25p,black")
-    rect = [[region[0], region[2]], [region[1], region[2]], [region[1], region[3]], [region[0], region[3]], [region[0], region[2]]]
+    rect = [
+        [plot_region[0], plot_region[2]],
+        [plot_region[1], plot_region[2]],
+        [plot_region[1], plot_region[3]],
+        [plot_region[0], plot_region[3]],
+        [plot_region[0], plot_region[2]],
+    ]
     fig.plot(data=rect, pen="1p,red")
 
 # Save and Show
-output_pdf = os.path.join(output_dir, f"map_catalog_{year}_{dayini}_{dayfin}.pdf")
+output_pdf = os.path.join(output_dir, f"map_catalog_{year}_{start_day}_{end_day}.pdf")
 fig.savefig(output_pdf, dpi=300)
 fig.show()
 print(f"Mappa salvata in: {output_pdf}")

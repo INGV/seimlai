@@ -12,6 +12,13 @@ Created on Tue Jul 29 09:10:01 2025
 ################################################################################
 
 #import libraries
+import os
+from config import *
+
+# Set GMT library path before importing pygmt
+if GMT_LIBRARY_PATH:
+    os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
+
 import obspy
 from obspy.clients.fdsn import Client
 from obspy import UTCDateTime
@@ -26,81 +33,18 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-import math
-import os
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import warnings
-from pyproj import CRS, Transformer
 from gamma.utils import association
+import pygmt
 
 sns.set(font_scale=1.2)
 sns.set_style("ticks")
 
-from config import *
 
 if __name__ == "__main__":
-    # SET VARIABLES FROM CONFIG
-    dayini = start_day
-    dayfin = end_day
     # Define output directory
-    output_dir = os.path.join(output_base, "output_catalog")
     os.makedirs(output_dir, exist_ok=True)
-    
-    
-    # SET GaMMA PARAMETERS
-    # Define coordinate systems 
-    wgs84 = CRS.from_epsg(4326)  # Latitude/Longitude
-    utm33n = CRS.from_epsg(32633)  # UTM zone 33N (only for Central Italy)
-    transformer = Transformer.from_crs(wgs84, utm33n, always_xy=True)
-    
-    # Gamma
-    config = {}
-    # The seismic catalog has km coordinate as outuput data
-    config["dims"] = ['x(km)', 'y(km)', 'z(km)']
-    config["use_dbscan"] = True
-    config["use_amplitude"] = False
-    config["x(km)"] = (250, 600)
-    config["y(km)"] = (4100, 5000)
-    config["z(km)"] = (0, 150)
-    config["vel"] = {"p": 7.0, "s": 7.0 / 1.75}  # We assume rather high velocities as we expect deeper events
-    config["method"] = "BGMM"
-    if config["method"] == "BGMM":
-        config["oversample_factor"] = 4
-    if config["method"] == "GMM":
-        config["oversample_factor"] = 1
-    
-    # DBSCAN
-    config["bfgs_bounds"] = (
-        (config["x(km)"][0] - 1, config["x(km)"][1] + 1),  # x
-        (config["y(km)"][0] - 1, config["y(km)"][1] + 1),  # y
-        (0, config["z(km)"][1] + 1),  # x
-        (None, None),  # t
-    )
-    #config["dbscan_eps"] = estimate_eps(stations, config["vel"]["p"]) 
-    config["dbscan_eps"] = 25  # seconds
-    config["dbscan_min_samples"] = 3
-    
-    ## using Eikonal for 1D velocity model
-    zz = [0.0, 5.5, 16.0, 32.0]
-    vp = [5.5, 5.5,  6.7,  7.8]
-    vp_vs_ratio = 1.73
-    vs = [v / vp_vs_ratio for v in vp]
-    h = 1.0
-    vel = {"z": zz, "p": vp, "s": vs}
-    config["eikonal"] = {"vel": vel, "h": h, "xlim": config["x(km)"], "ylim": config["y(km)"], "zlim": config["z(km)"]}
-    
-    # Filtering
-    config["min_picks_per_eq"] = 6
-    config["min_p_picks_per_eq"] = 4
-    config["min_s_picks_per_eq"] = 3
-    config["max_sigma11"] = 1.5 # second
-    config["max_sigma22"] = 1.0 # log10(m/s)
-    config["max_sigma12"] = 1.0 # covariance
-    
-    
+
     #FUNCTIONS TO READ STATION FILE AND CONVERT COORDINATES
     def process_stations(file_path):
         stations_df = pd.read_csv(file_path)
@@ -117,7 +61,7 @@ if __name__ == "__main__":
     
     
     # UPLOAD PICKS FILE
-    sorted_file = os.path.join(output_picks_dir, f"{dayini}_{dayfin}_{year}_picks_sort.csv")
+    sorted_file = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
     # Estract nework and station name
     #picks_df["Network"] = picks_df["Station"].str.split(".").str[0]  # Es. "IV.INTR." -> "IV"
@@ -159,7 +103,7 @@ if __name__ == "__main__":
     assignments = pd.DataFrame(assignments, columns=["pick_idx", "event_idx", "prob_gamma"])
     
     # SAVE Raw CATALOG with km coordinates
-    catalog_file_in=os.path.join(output_dir,f"seismic_catalog_{year}_{dayini}_{dayfin}.csv")
+    catalog_file_in=os.path.join(output_dir,f"seismic_catalog_{year}_{start_day}_{end_day}.csv")
     catalog.to_csv(catalog_file_in, index=False)
     
     # Save picks 
@@ -179,7 +123,7 @@ if __name__ == "__main__":
     picks_with_events.drop(columns=["event_index"], inplace=True, errors="ignore")
     picks_with_events = picks_with_events[["id", "timestamp", "prob", "type", "event_idx", "prob_gamma"]]
     # Save all picks (the id .-1 is referred to un-associated picks)
-    output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{dayini}_{dayfin}.csv")
+    output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
     picks_with_events.to_csv(output_gamma_picks, index=False)
     
     print(f"Picks save in {output_gamma_picks}!")
@@ -189,7 +133,7 @@ if __name__ == "__main__":
     gamma_picks = picks_with_events.copy()
     associated_picks = gamma_picks[gamma_picks["event_idx"] != -1].copy()
     associated_picks = associated_picks.sort_values(by=["event_idx", "timestamp"])
-    output_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{dayini}_{dayfin}.csv")
+    output_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
     associated_picks.to_csv(output_associated_picks, index=False)
     
     print(f"Associated picks saved in {output_associated_picks}!")
@@ -204,13 +148,12 @@ if __name__ == "__main__":
     
     # Delate km coordinate from dataframe and put the degree coordinate.
     catalog = catalog.drop(columns=[x_col, y_col])
-    catalog_file=os.path.join(output_dir,f"seismic_catalog_with_latlon_{year}_{dayini}_{dayfin}.csv")
+    catalog_file=os.path.join(output_dir,f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
     #Save catalog with correct coordinates
     catalog.to_csv(catalog_file, index=False)
     print("Seismic catalog saved in seismic_catalog_with_latlon.csv con solo longitude e latitude.")
     
     # Use PyGMT to plot the seismicity
-    os.environ["GMT_LIBRARY_PATH"] = "/opt/homebrew/lib/"
     pygmt.config(GMT_VERBOSE="q")
     # 1. Central Italy range
     region = [12.5, 14.00, 42.00, 43.50]
@@ -223,7 +166,7 @@ if __name__ == "__main__":
     
     # 4. Topography with realistic shading
     fig.grdimage(
-        grid="/Users/rossella.fonzetti/WORK/TOPO/italy_srtm.grd",  # your grd file or @
+        grid=GMT_GRID_PATH,  # your grd file or @
         region=region,
         projection="M6i",
         shading="+a135+nt0.6",
@@ -295,7 +238,7 @@ if __name__ == "__main__":
         fig.plot(data=rect, pen="1p,red")
     
     # Save plot 
-    output_file = os.path.join(output_dir, f"catalog_{year}_{dayini}_{dayfin}.pdf")
+    output_file = os.path.join(output_dir, f"catalog_{year}_{start_day}_{end_day}.pdf")
     fig.savefig(output_file, dpi=300)
     
     # Show the plot

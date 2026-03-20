@@ -46,12 +46,16 @@ def log(message):
 
 # === Helper function for clients ===
 def try_with_clients(method_name, *args, **kwargs):
-    for client in fdsn_clients:
+    clients = get_fdsn_clients()
+    if not clients:
+        raise RuntimeError(f"No FDSN clients available to call {method_name}.")
+    
+    for client in clients:
         try:
             method = getattr(client, method_name)
             return method(*args, **kwargs)
         except Exception as e:
-            pass
+            continue
     raise RuntimeError(f"All clients failed for {method_name}.")
 
 # === Funzione Worker per il download parallelo ===

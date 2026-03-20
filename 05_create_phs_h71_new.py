@@ -6,15 +6,9 @@ Created on Mon Feb 16 11:16:16 2026
 @author: rossella.fonzetti
 """
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Feb 11 15:21:04 2026
-Updated logic for S-wave seconds calculation.
-"""
-
 import pandas as pd
 import os
+from config import *
 
 ########################################################################
 # This script filters the best location of the GaMMA seismic catalog, 
@@ -22,23 +16,12 @@ import os
 # After the filtering, the files for Hypoellipse absolute location are provided.
 ########################################################################
 
-#########################################################################
-#base_dir="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PRETRAINED_ORIGINAL/output/output_catalog"
-#base_dir="/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_4096_bs_0.0001_lr_std_norm.AQ2009_transferlearning_focalloss_20250627_143520_/output/output_catalog"
-base_dir= "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/EP_41_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_/output/output_catalog_09-09"
-#base_dir= "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_/output/output_catalog_09-09"
-#base_dir= "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_/output/output_catalog_09-09"
+# --- Derived paths from config.py ---
+os.makedirs(h71_filtered_dir, exist_ok=True)
 
-filtered_dir = os.path.join(base_dir, "filtered_data")
-os.makedirs(filtered_dir, exist_ok=True)
-
-# FILE PATHS
-filecat = f"{base_dir}/seismic_catalog_with_latlon_2016_294_306.csv"        
-filepic = f"{base_dir}/gamma_pick_grouped_2016_294_306.csv"  
-
-# PARAMETRI FILTRO
-minp = 4     
-mins = 2      
+# FILE PATHS (derived from config variables)
+filecat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+filepic = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
 
 # LETTURA FILE
 df_catalogo = pd.read_csv(filecat)
@@ -62,7 +45,7 @@ grouped.columns.name = None
 grouped = grouped.rename(columns={'p': 'num_p', 's': 'num_s'})
 
 # FILTRAGGIO EVENTI
-eventi_validi = grouped[(grouped['num_p'] >= minp) & (grouped['num_s'] >= mins)].copy()
+eventi_validi = grouped[(grouped['num_p'] >= h71_min_p) & (grouped['num_s'] >= h71_min_s)].copy()
 print(f"Number of filtered event: {len(eventi_validi)} on {df_picks['event_idx'].nunique()}")
 
 # ESTRAZIONE PICKS VALIDI
@@ -185,7 +168,7 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
 
 
 # ESECUZIONE CREAZIONE FILE PHS
-write_phs(df_picks_filtrati, df_catalogo, filtered_dir)
+write_phs(df_picks_filtrati, df_catalogo, h71_filtered_dir)
 
 # --- CREAZIONE FILE H71 ---
 
@@ -246,7 +229,7 @@ def write_h71_file(df_catalogo, df_picks_filtrati, output_path):
 
             f.write("".join(row) + "\n")
 
-output_h71 = f"{base_dir}/filtered_data/out.h71"
+output_h71 = os.path.join(h71_filtered_dir, "out.h71")
 write_h71_file(df_catalogo, df_picks_filtrati, output_h71)
 
 
@@ -316,7 +299,9 @@ def converti_phs_file(file_input, file_output, debug=False):
 
             fout.write(''.join(linea_out).rstrip() + '\n')
 
-converti_phs_file(f"{base_dir}/filtered_data/out.phs", f"{base_dir}/filtered_data/out_conv.phs", debug=False)
+phs_input = os.path.join(h71_filtered_dir, "out.phs")
+phs_output = os.path.join(h71_filtered_dir, "out_conv.phs")
+converti_phs_file(phs_input, phs_output, debug=False)
 
 # --- CONVERSIONE ID SU FILE H71 ---
 
@@ -348,4 +333,4 @@ def convert_h71_ids(input_path):
 
     print(f"File H71 update saved in: {output_path}")
 
-convert_h71_ids(f"{base_dir}/filtered_data/out.h71")
+convert_h71_ids(os.path.join(h71_filtered_dir, "out.h71"))
