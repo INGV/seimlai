@@ -1,9 +1,11 @@
 name: catalog
 channels:
+  - conda-forge
   - defaults
   - https://repo.anaconda.com/pkgs/main
   - https://repo.anaconda.com/pkgs/r
 dependencies:
+  - ghostscript=9.54.0=h6b3803e_2
   - aiohappyeyeballs=2.4.4=py311hca03da5_0
   - aiohttp=3.11.10=py311h80987f9_0
   - aiosignal=1.2.0=pyhd3eb1b0_0
