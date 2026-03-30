@@ -26,16 +26,16 @@ minlongitude = 11.75
 maxlongitude = 14.00
 
 # === Time Interval ===
-starttime = UTCDateTime("2016-11-01")
-endtime = UTCDateTime("2016-11-01")
+starttime = UTCDateTime("2016-10-31")
+endtime = UTCDateTime("2016-10-31")
 year = 2016
 
 # === Station Parameters ===
 network = "*"                # network code
 channel = "BH?,HH?,EH?"      # channel types
 stations_list = "*"
-# fdsn_clients = [Client("INGV"), Client("IRIS")]
-fdsn_clients = ["IRIS"]
+fdsn_clients = ["INGV"]
+#fdsn_clients = ["IRIS"]
 
 # === Picking Parameters ===
 BATCH_SIZE = 256
@@ -45,7 +45,7 @@ S_THRESHOLD = 0.9
 # === Model Configuration ===
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
 # Set to None if you want to load a custom model from CUSTOM_MODEL_PATH.
-MODEL_TYPE = 'stead'
+MODEL_TYPE = 'original'
 # Path to a custom fine-tuned model weights file (.pth).
 # Set to None to use the pretrained model specified by MODEL_TYPE.
 CUSTOM_MODEL_PATH = None  # e.g. "/path/to/your/model.pth"
@@ -69,7 +69,7 @@ config = {}
 # The seismic catalog has km coordinate as outuput data
 config["dims"] = ['x(km)', 'y(km)', 'z(km)']
 config["use_dbscan"] = True
-config["use_amplitude"] = False
+config["use_amplitude"] = True
 config["x(km)"] = (250, 600)
 config["y(km)"] = (4100, 5000)
 config["z(km)"] = (0, 150)
@@ -158,6 +158,7 @@ def get_fdsn_clients():
 
 # --- SETUP DIRECTORIES CONTAINING THE OUTPUTS OF THE SCRIPTS ---
 root_dir = os.path.join(base_dir, case_study_name, "waveforms")  
+inventory_dir = os.path.join(base_dir, case_study_name, "inventory")
 waveform_base = os.path.join(root_dir, str(year))  # where script 02+ reads from
 output_base = os.path.join(base_dir, case_study_name, "output")
 output_picks_dir = os.path.join(output_base, f"output_picks_{P_THRESHOLD}")
