@@ -31,11 +31,11 @@ endtime = UTCDateTime("2016-11-01")
 year = 2016
 
 # === Station Parameters ===
-network = "YR"                # network code
+network = "*"                # network code
 channel = "BH?,HH?,EH?"      # channel types
 stations_list = "*"
 # fdsn_clients = [Client("INGV"), Client("IRIS")]
-fdsn_clients = ["IRIS", "INGV"]
+fdsn_clients = ["IRIS"]
 
 # === Picking Parameters ===
 BATCH_SIZE = 256
