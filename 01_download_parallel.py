@@ -117,7 +117,7 @@ while current_time <= endtime:
         inventory = try_with_clients("get_stations", starttime=t0, endtime=t1,
                                         minlatitude=minlatitude, maxlatitude=maxlatitude,
                                         minlongitude=minlongitude, maxlongitude=maxlongitude,
-                                        level="channel", network=network, channel=channel,
+                                        level="response", network=network, channel=channel,
                                         station=stations_list)
 
         # Lista dei "lavori" da fare in parallelo
