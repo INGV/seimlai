@@ -19,7 +19,7 @@ import argparse
 # ============================================================
 PIPELINE = [
     ("01",    "01_download_parallel.py",                    "Download waveforms"),
-    ("02_1",  "02_1_apply_and_visualize_picks_priority.py", "Apply PhaseNet picks"),
+    ("02_1",  "02_1_apply_and_visualize_picks_priority.py", "Apply phase picking using NN"),
     ("03",    "03_sort_picks.py",                          "Sort and consolidate picks"),
     ("03_1",  "03_1_analyse_prediction_metrics.py",         "Analyse prediction metrics"),
     ("04_1",  "04_1_built_the_catalog_opt.py",              "Run GaMMA association"),
@@ -50,7 +50,7 @@ def parse_args():
     epilog = """
 STEP IDs (in pipeline order):
   01      Download waveforms
-  02_1    Apply PhaseNet picks
+  02_1    Apply phase picking using NN
   03      Sort and consolidate picks
   03_1    Analyse prediction metrics
   04_1    Run GaMMA association
