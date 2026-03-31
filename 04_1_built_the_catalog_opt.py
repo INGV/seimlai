@@ -68,7 +68,7 @@ if __name__ == "__main__":
     picks_df["Station"] = picks_df["Station"].str.split(".").str[-2]  # Es. "IV.INTR." -> "INTR"
     
     # Change network and station columns position
-    picks_df = picks_df[["Julian_Day", "Station", "Datetime", "Probability", "Wave_Type"]]
+    picks_df = picks_df[["Julian_Day", "Station", "Datetime", "Probability", "Wave_Type", "Amplitude"]]
     
     # Dataframe creation
     pick_df = []
@@ -76,6 +76,7 @@ if __name__ == "__main__":
         pick_df.append({
             "id": row['Station'], #Station Name
             "timestamp": row["Datetime"], # Arrival time
+            "amp": row["Amplitude"], # Log10 peak amplitude
             "prob": row["Probability"],  # PhaseNet probability
             "type": row["Wave_Type"].lower() # waves type (p or s)
         })

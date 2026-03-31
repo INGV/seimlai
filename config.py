@@ -18,6 +18,7 @@ from pyproj import CRS, Transformer
 
 # === Case Study ===
 case_study_name = "Amatrice_catalog"
+#TODO: inserire la possibilità di scegliere la path dei cataloghi
 
 # === Geographic Bounding Box ===
 minlatitude = 42.25
@@ -34,7 +35,7 @@ year = 2016
 network = "*"                # network code
 channel = "BH?,HH?,EH?"      # channel types
 stations_list = "*"
-# fdsn_clients = [Client("INGV"), Client("IRIS")]
+# fdsn_clients = ["INGV", "IRIS"]
 fdsn_clients = ["IRIS"]
 
 # === Picking Parameters ===
@@ -69,7 +70,7 @@ config = {}
 # The seismic catalog has km coordinate as outuput data
 config["dims"] = ['x(km)', 'y(km)', 'z(km)']
 config["use_dbscan"] = True
-config["use_amplitude"] = False
+config["use_amplitude"] = True
 config["x(km)"] = (250, 600)
 config["y(km)"] = (4100, 5000)
 config["z(km)"] = (0, 150)

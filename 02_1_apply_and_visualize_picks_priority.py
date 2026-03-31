@@ -14,6 +14,7 @@ import math
 from obspy import read, Stream, Trace, UTCDateTime
 from seisbench.models import PhaseNet
 import pandas as pd
+import numpy as np
 import torch
 import matplotlib.pyplot as plt 
 import matplotlib.dates as mdates 
@@ -247,10 +248,20 @@ for day in range(start_day, end_day + 1):
                 # --- SALVATAGGIO CSV ---
                 pick_df = []
                 for p in outputs:
+                    # Estrazione ampiezza picco (log10) in una finestra di 1 secondo vicino al pick
+                    p_time = p.peak_time
+                    sliced_stream = stream.slice(p_time - 0.5, p_time + 0.5)
+                    if len(sliced_stream) > 0:
+                        max_amp = np.max([np.max(np.abs(tr.data)) for tr in sliced_stream if len(tr.data) > 0])
+                        amp = np.log10(max_amp) if max_amp > 0 else -10.0
+                    else:
+                        amp = -10.0
+                    
                     pick_df.append({
                         "station": stat,
                         "id": p.trace_id,
                         "timestamp": p.peak_time.datetime,
+                        "amp": amp,
                         "prob": p.peak_value,
                         "type": p.phase.lower()
                     })
