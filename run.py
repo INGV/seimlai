@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import argparse
+from config import *
 
 # ============================================================
 # PIPELINE DEFINITION
@@ -111,6 +112,10 @@ def main():
                 print(f"[ERROR] Unknown step ID '{s}'. Valid IDs: {ids}")
                 sys.exit(1)
         steps_to_run = [s for s in PIPELINE if s[0] in args.only_steps]
+
+    # Filter out step 01 if PERSONAL_FOLDER is set AND DOWNLOAD_DATA is False
+    if PERSONAL_FOLDER is not None and not DOWNLOAD_DATA:
+        steps_to_run = [s for s in steps_to_run if s[0] != "01"]
 
     print(f"\n{'#'*60}")
     print(f"  SEISMIC PIPELINE — {len(steps_to_run)} step(s) to run")

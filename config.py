@@ -18,7 +18,12 @@ from pyproj import CRS, Transformer
 
 # === Case Study ===
 case_study_name = "Amatrice_catalog"
-#TODO: inserire la possibilità di scegliere la path dei cataloghi
+# Set to a path (e.g. "/path/to/external/folder") to store all data and output there.
+# If None, the folder [case_study_name] will be created in the current directory.
+PERSONAL_FOLDER = None
+# Set to True to run the download script (01).
+# Set to False to skip it and use existing data if you have put yout own folder.
+DOWNLOAD_DATA = True 
 
 # === Geographic Bounding Box ===
 minlatitude = 42.25
@@ -36,7 +41,7 @@ network = "*"                # network code
 channel = "BH?,HH?,EH?"      # channel types
 stations_list = "*"
 # fdsn_clients = ["INGV", "IRIS"]
-fdsn_clients = ["IRIS"]
+fdsn_clients = ["IRIS", "INGV"]
 
 # === Picking Parameters ===
 BATCH_SIZE = 256
@@ -140,9 +145,16 @@ end_day = endtime.julday
 
 # === Directory Paths ===
 base_dir = os.getcwd()
-case_study_dir = os.path.join(base_dir, case_study_name)
-inventory_dir = os.path.join(base_dir, case_study_name, "inventory")
-download_log_path = os.path.join(base_dir, case_study_name, "download_log.txt")  # used by script 01
+if PERSONAL_FOLDER:
+    project_root = PERSONAL_FOLDER
+else:
+    project_root = os.path.join(os.getcwd(), case_study_name)
+
+# Ensure the main directory exists
+os.makedirs(project_root, exist_ok=True)
+
+inventory_dir = os.path.join(project_root, "inventory")
+download_log_path = os.path.join(project_root, "download_log.txt")  # used by script 01
 station_file_name = "stations.csv"  # station file name (used by script 06)
 
 # === FDSN Clients ===
@@ -158,10 +170,10 @@ def get_fdsn_clients():
     return clients
 
 # --- SETUP DIRECTORIES CONTAINING THE OUTPUTS OF THE SCRIPTS ---
-root_dir = os.path.join(base_dir, case_study_name, "waveforms")  
-inventory_dir = os.path.join(base_dir, case_study_name, "inventory")
+root_dir = os.path.join(project_root, "waveforms")  
+inventory_dir = os.path.join(project_root, "inventory")
 waveform_base = os.path.join(root_dir, str(year))  # where script 02+ reads from
-output_base = os.path.join(base_dir, case_study_name, "output")
+output_base = os.path.join(project_root, "output")
 output_picks_dir = os.path.join(output_base, f"output_picks_{P_THRESHOLD}")
 plot_dir = os.path.join(output_base, "plots_annotations", f"{year}_{start_day:03d}_{end_day:03d}")
 log_file_path = os.path.join(output_base, "phase_picking_log.txt")  # used by scripts 02+
@@ -169,6 +181,8 @@ log_file_path = os.path.join(output_base, "phase_picking_log.txt")  # used by sc
 output_dir = os.path.join(output_base, "output_catalog")
 # Used by script 05 and script 06 for the filtered Hypoellipse output
 h71_filtered_dir = os.path.join(output_dir, "filtered_data")
+# Additional path needed for some scripts
+case_study_dir = project_root
 
 # === Device Configuration ===
 # --- CONFIGURAZIONE DEVICE (GPU/MPS/CPU) ---

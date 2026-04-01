@@ -26,6 +26,12 @@ from datetime import timedelta, datetime
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from config import *
+import sys
+
+if PERSONAL_FOLDER is not None and not DOWNLOAD_DATA:
+    print(f"\n[SKIP] PERSONAL_FOLDER is set but DOWNLOAD_DATA is False in config.py.")
+    print("      Skipping download (Step 01). Set DOWNLOAD_DATA = True to download to PERSONAL_FOLDER.")
+    sys.exit(0)
 
 # === Create directories ===
 os.makedirs(root_dir, exist_ok=True)
@@ -57,6 +63,33 @@ def try_with_clients(method_name, *args, **kwargs):
         except Exception as e:
             continue
     raise RuntimeError(f"All clients failed for {method_name}.")
+
+def get_combined_stations(*args, **kwargs):
+    """
+    Queries all FDSN clients and combines their inventories.
+    Returns a single ObsPy Inventory object.
+    """
+    clients = get_fdsn_clients()
+    if not clients:
+        raise RuntimeError("No FDSN clients available to get stations.")
+    
+    combined_inv = None
+    for client in clients:
+        try:
+            log(f"  [Info] Requesting stations from client...")
+            inv = client.get_stations(*args, **kwargs)
+            if combined_inv is None:
+                combined_inv = inv
+            else:
+                combined_inv += inv
+            log(f"  [Info] Successfully added stations from client.")
+        except Exception as e:
+            log(f"  [Info] A client failed to get_stations: {e}")
+            
+    if combined_inv is None:
+        raise RuntimeError("All clients failed to get_stations.")
+    
+    return combined_inv
 
 # === Funzione Worker per il download parallelo ===
 def process_single_channel(net_code, sta_code, comp, t0, t1, year, day_of_year):
@@ -113,12 +146,12 @@ while current_time <= endtime:
     log(f"\n>> Downloading from {t0.date} to {t1.date}")
 
     try:
-        # 1. Scarichiamo l'inventario (Veloce, lo lasciamo sequenziale)
-        inventory = try_with_clients("get_stations", starttime=t0, endtime=t1,
-                                        minlatitude=minlatitude, maxlatitude=maxlatitude,
-                                        minlongitude=minlongitude, maxlongitude=maxlongitude,
-                                        level="response", network=network, channel=channel,
-                                        station=stations_list)
+        # 1. Scarichiamo l'inventario aggregato da tutti i client
+        inventory = get_combined_stations(starttime=t0, endtime=t1,
+                                         minlatitude=minlatitude, maxlatitude=maxlatitude,
+                                         minlongitude=minlongitude, maxlongitude=maxlongitude,
+                                         level="response", network=network, channel=channel,
+                                         station=stations_list)
 
         # Lista dei "lavori" da fare in parallelo
         download_tasks = []
@@ -148,7 +181,9 @@ while current_time <= endtime:
                     
                     # Invece di scaricare qui, aggiungiamo il compito alla lista
                     # Parametri: (net, sta, comp, t0, t1, year, day_of_year)
-                    download_tasks.append((net_code, sta_code, comp, t0, t1, year, day_of_year))
+                    task = (net_code, sta_code, comp, t0, t1, year, day_of_year)
+                    if task not in download_tasks:
+                        download_tasks.append(task)
 
                 # === Save StationXML inventory (Veloce, sequenziale) ===
                 try:
