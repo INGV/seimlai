@@ -302,7 +302,6 @@ for day in range(start_day, end_day + 1):
                         "station": stat,
                         "id": p.trace_id,
                         "timestamp": p.peak_time.datetime,
-                        "amp": amp,
                         "prob": p.peak_value,
                         "amp": amp_val,
                         "type": p.phase.lower()
