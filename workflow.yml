@@ -1,4 +1,4 @@
-name: catalog
+name: workflow
 channels:
   - conda-forge
   - defaults
@@ -344,4 +344,4 @@ dependencies:
       - xarray==2025.4.0
       - xyzservices==2025.4.0
       - zipp==3.21.0
-prefix: /Users/rossella.fonzetti/miniconda3/envs/catalog
+prefix: /Users/rossella.fonzetti/miniconda3/envs/workflow

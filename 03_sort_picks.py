@@ -17,10 +17,11 @@ def sort_seismic_picking(df, output_file):
 
     # Rename columns
     df = df.rename(columns={
-        "id": "Station",
+        "station": "Station",
         "timestamp": "Datetime",
         "prob": "Probability",
-        "type": "Wave_Type"
+        "type": "Wave_Type",
+        "amp": "Amplitude"
     })
 
     # Convert Datatime column
@@ -30,7 +31,7 @@ def sort_seismic_picking(df, output_file):
     df["Julian_Day"] = df["Datetime"].dt.dayofyear
 
     # Rename Columns
-    column_order = ["Julian_Day", "Station", "Datetime", "Probability", "Wave_Type"]
+    column_order = ["Julian_Day", "Station", "Datetime", "Probability", "amp", "Wave_Type"]
     df = df[column_order]
 
     # Sort picks

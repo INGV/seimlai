@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import argparse
+from config import *
 
 # ============================================================
 # PIPELINE DEFINITION
@@ -19,7 +20,7 @@ import argparse
 # ============================================================
 PIPELINE = [
     ("01",    "01_download_parallel.py",                    "Download waveforms"),
-    ("02_1",  "02_1_apply_and_visualize_picks_priority.py", "Apply PhaseNet picks"),
+    ("02_1",  "02_1_apply_and_visualize_picks_priority.py", "Apply phase picking using NN"),
     ("03",    "03_sort_picks.py",                          "Sort and consolidate picks"),
     ("03_1",  "03_1_analyse_prediction_metrics.py",         "Analyse prediction metrics"),
     ("04_1",  "04_1_built_the_catalog_opt.py",              "Run GaMMA association"),
@@ -50,7 +51,7 @@ def parse_args():
     epilog = """
 STEP IDs (in pipeline order):
   01      Download waveforms
-  02_1    Apply PhaseNet picks
+  02_1    Apply phase picking using NN
   03      Sort and consolidate picks
   03_1    Analyse prediction metrics
   04_1    Run GaMMA association
@@ -111,6 +112,10 @@ def main():
                 print(f"[ERROR] Unknown step ID '{s}'. Valid IDs: {ids}")
                 sys.exit(1)
         steps_to_run = [s for s in PIPELINE if s[0] in args.only_steps]
+
+    # Filter out step 01 if PERSONAL_FOLDER is set AND DOWNLOAD_DATA is False
+    if PERSONAL_FOLDER is not None and not DOWNLOAD_DATA:
+        steps_to_run = [s for s in steps_to_run if s[0] != "01"]
 
     print(f"\n{'#'*60}")
     print(f"  SEISMIC PIPELINE — {len(steps_to_run)} step(s) to run")

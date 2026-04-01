@@ -11,13 +11,16 @@ import gc
 import time
 import re
 import math
-from obspy import read, Stream, Trace, UTCDateTime
+from obspy import read, Stream, Trace, UTCDateTime, read_inventory
 from seisbench.models import PhaseNet
 import pandas as pd
+import numpy as np
 import torch
 import matplotlib.pyplot as plt 
 import matplotlib.dates as mdates 
 import matplotlib.gridspec as gridspec
+import numpy as np
+import os
 from config import *
 
 # --- CONFIGURAZIONE DEVICE & MODELLO ---
@@ -38,6 +41,32 @@ log_file.write("="*60 + "\n")
 
 # Start timing
 overall_start_time = time.time()
+
+def get_peak_amplitude(pick_time, stream_vel, window_sec=2.0):
+    """
+    Taglia una finestra attorno al pick e calcola la massima ampiezza assoluta.
+    Si aspetta che stream_vel sia già stato convertito in m/s (VEL).
+    """
+    try:
+        t = UTCDateTime(pick_time)
+        # Taglia la finestra temporale (1s prima, 'window_sec' dopo)
+        st_trim = stream_vel.slice(t - 1.0, t + window_sec).copy()
+
+        if len(st_trim) == 0:
+            return np.nan
+
+        st_trim.detrend("demean")
+
+        max_amp = 0.0
+        for tr in st_trim:
+            tr_max = np.max(np.abs(tr.data))
+            if tr_max > max_amp:
+                max_amp = tr_max
+
+        # Converte esplicitamente in float per evitare problemi con i tensori/numpy
+        return float(max_amp)
+    except Exception as e:
+        return np.nan
 
 # --- MAIN LOOP ---
 for day in range(start_day, end_day + 1):
@@ -133,6 +162,27 @@ for day in range(start_day, end_day + 1):
                 print("Skipped: Not enough components (needs 3)")
                 log_file.write("Skipped: Not enough components\n")
                 continue
+
+            # =================================================================
+            # === RIMOZIONE RISPOSTA STRUMENTALE PER CALCOLO AMPIEZZA ===
+            # =================================================================
+            stream_vel = stream.copy()
+            try:
+                # Cerca il file XML della stazione
+                inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
+                
+                if os.path.exists(inv_path):
+                    inv = read_inventory(inv_path)
+                    # Applica filtro per evitare rumore a bassa e alta frequenza
+                    pre_filt = [0.1, 0.5, 30.0, 40.0] 
+                    stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
+                    log_file.write("    Instrument response removed (Converted to VEL).\n")
+                else:
+                    print(f"Warning: XML non trovato per {net}_{stat}. Ampiezza rimarrà in Counts.")
+                    log_file.write(f"    Warning: XML not found for {net}_{stat}.\n")
+            except Exception as e:
+                print(f"Errore nella rimozione della risposta per {stat}: {e}")
+                log_file.write(f"    Error removing response for {stat}: {e}\n")
 
             try:
                 log_file.write("    Running model.annotate()...\n")
@@ -247,11 +297,14 @@ for day in range(start_day, end_day + 1):
                 # --- SALVATAGGIO CSV ---
                 pick_df = []
                 for p in outputs:
+                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream_vel)
                     pick_df.append({
                         "station": stat,
                         "id": p.trace_id,
                         "timestamp": p.peak_time.datetime,
+                        "amp": amp,
                         "prob": p.peak_value,
+                        "amp": amp_val,
                         "type": p.phase.lower()
                     })
                 pick_df = pd.DataFrame(pick_df)
