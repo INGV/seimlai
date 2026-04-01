@@ -194,7 +194,7 @@ for day in range(start_day, end_day + 1):
                 log_file.write("    Classification complete.\n")
                 
                 # --- PLOTTING SECTION (SOLO Z + PROBABILITÀ) ---
-                z_trace = next((trace for trace in stream if trace.stats.channel.endswith('Z')), None)
+                """ z_trace = next((trace for trace in stream if trace.stats.channel.endswith('Z')), None)
                 
                 if z_trace is not None and z_trace.stats.endtime - z_trace.stats.starttime > 0:
                     
@@ -292,7 +292,7 @@ for day in range(start_day, end_day + 1):
                     figure_filename = os.path.join(plot_dir, f"{net}_{stat}_{year}_{day:03d}_FULL_Z_annotations.pdf")
                     plt.savefig(figure_filename, bbox_inches='tight', format='pdf', dpi=300) 
                     plt.close(fig) 
-                    log_file.write(f"    Plot saved: {figure_filename}\n")
+                    log_file.write(f"    Plot saved: {figure_filename}\n") """
 
                 # --- SALVATAGGIO CSV ---
                 pick_df = []
