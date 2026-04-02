@@ -201,10 +201,14 @@ else:
 # otherwise loads the pretrained model specified by MODEL_TYPE from SeisBench.
 if CUSTOM_MODEL_PATH is not None:
     model = PhaseNet()
+    model.labels = "PSN"
     import torch as _torch
     model.load_state_dict(_torch.load(CUSTOM_MODEL_PATH, map_location=device))
+    model.to(device)
     model.eval()
     print(f"Custom model loaded from: {CUSTOM_MODEL_PATH}")
 else:
     model = PhaseNet.from_pretrained(MODEL_TYPE)
+    model.to(device)
+    model.eval()
     print(f"Pretrained model loaded: PhaseNet '{MODEL_TYPE}'")
