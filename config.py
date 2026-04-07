@@ -175,10 +175,10 @@ inventory_dir = os.path.join(project_root, "inventory")
 waveform_base = os.path.join(root_dir, str(year))  # where script 02+ reads from
 output_base = os.path.join(project_root, "output")
 output_picks_dir = os.path.join(output_base, f"output_picks_{P_THRESHOLD}")
-plot_dir = os.path.join(output_base, "plots_annotations", f"{year}_{start_day:03d}_{end_day:03d}")
+plot_dir = os.path.join(output_base, f"plots_annotations_{P_THRESHOLD}", f"{year}_{start_day:03d}_{end_day:03d}")
 log_file_path = os.path.join(output_base, "phase_picking_log.txt")  # used by scripts 02+
 # Used by script 04_1 for the output
-output_dir = os.path.join(output_base, "output_catalog")
+output_dir = os.path.join(output_base, f"output_catalog_{P_THRESHOLD}")
 # Used by script 05 and script 06 for the filtered Hypoellipse output
 h71_filtered_dir = os.path.join(output_dir, "filtered_data")
 # Additional path needed for some scripts
@@ -201,10 +201,12 @@ else:
 # otherwise loads the pretrained model specified by MODEL_TYPE from SeisBench.
 if CUSTOM_MODEL_PATH is not None:
     model = PhaseNet()
+    model.labels = "PSN"
     import torch as _torch
     model.load_state_dict(_torch.load(CUSTOM_MODEL_PATH, map_location=device))
-    model.eval()
     print(f"Custom model loaded from: {CUSTOM_MODEL_PATH}")
 else:
     model = PhaseNet.from_pretrained(MODEL_TYPE)
     print(f"Pretrained model loaded: PhaseNet '{MODEL_TYPE}'")
+model.to(device)
+model.eval()
