@@ -30,7 +30,7 @@ print(f"Model loaded and ready on {device}")
 
 
 os.makedirs(output_picks_dir, exist_ok=True)
-os.makedirs(plot_dir, exist_ok=True) 
+#os.makedirs(plot_dir, exist_ok=True) 
 
 # --- LOGGING ---
 log_file = open(log_file_path, "w")
@@ -42,30 +42,39 @@ log_file.write("="*60 + "\n")
 # Start timing
 overall_start_time = time.time()
 
-def get_peak_amplitude(pick_time, stream_vel, window_sec=2.0):
+def get_peak_amplitude(pick_time, stream_raw, inv_path, log_file, window_sec=2.0):
     """
-    Taglia una finestra attorno al pick e calcola la massima ampiezza assoluta.
-    Si aspetta che stream_vel sia già stato convertito in m/s (VEL).
+    Calcola l'ampiezza e logga eventuali errori sul singolo pick.
     """
     try:
         t = UTCDateTime(pick_time)
-        # Taglia la finestra temporale (1s prima, 'window_sec' dopo)
-        st_trim = stream_vel.slice(t - 1.0, t + window_sec).copy()
+        st_wide = stream_raw.slice(t - 30.0, t + 30.0).copy()
 
-        if len(st_trim) == 0:
+        if len(st_wide) == 0:
             return np.nan
 
-        st_trim.detrend("demean")
+        st_wide.detrend("demean")
+        st_wide.taper(max_percentage=0.05)
+        
+        if os.path.exists(inv_path):
+            inv = read_inventory(inv_path)
+            pre_filt = [0.1, 0.5, 30.0, 40.0]
+            st_wide.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
 
+        st_strict = st_wide.slice(t - 1.0, t + window_sec)
+        
         max_amp = 0.0
-        for tr in st_trim:
+        for tr in st_strict:
             tr_max = np.max(np.abs(tr.data))
             if tr_max > max_amp:
                 max_amp = tr_max
 
-        # Converte esplicitamente in float per evitare problemi con i tensori/numpy
         return float(max_amp)
     except Exception as e:
+        # Se c'è un errore imprevisto, lo stampiamo e lo scriviamo nel log
+        err_msg = f"    Error calculating amplitude for pick at {pick_time}: {e}"
+        print(err_msg)
+        log_file.write(err_msg + "\n")
         return np.nan
 
 # --- MAIN LOOP ---
@@ -163,30 +172,9 @@ for day in range(start_day, end_day + 1):
                 log_file.write("Skipped: Not enough components\n")
                 continue
 
-            # =================================================================
-            # === RIMOZIONE RISPOSTA STRUMENTALE PER CALCOLO AMPIEZZA ===
-            # =================================================================
-            stream_vel = stream.copy()
             try:
-                # Cerca il file XML della stazione
-                inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
-                
-                if os.path.exists(inv_path):
-                    inv = read_inventory(inv_path)
-                    # Applica filtro per evitare rumore a bassa e alta frequenza
-                    pre_filt = [0.1, 0.5, 30.0, 40.0] 
-                    stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
-                    log_file.write("    Instrument response removed (Converted to VEL).\n")
-                else:
-                    print(f"Warning: XML non trovato per {net}_{stat}. Ampiezza rimarrà in Counts.")
-                    log_file.write(f"    Warning: XML not found for {net}_{stat}.\n")
-            except Exception as e:
-                print(f"Errore nella rimozione della risposta per {stat}: {e}")
-                log_file.write(f"    Error removing response for {stat}: {e}\n")
-
-            try:
-                log_file.write("    Running model.annotate()...\n")
-                annotations = model.annotate(stream)
+                #log_file.write("    Running model.annotate()...\n")
+                #annotations = model.annotate(stream)
                 
                 log_file.write("    Running model.classify()...\n")
                 classified = model.classify(stream, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
@@ -293,11 +281,17 @@ for day in range(start_day, end_day + 1):
                     plt.savefig(figure_filename, bbox_inches='tight', format='pdf', dpi=300) 
                     plt.close(fig) 
                     log_file.write(f"    Plot saved: {figure_filename}\n") """
-
+                inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
+                # --- CONTROLLO ESISTENZA XML ---
+                if os.path.exists(inv_path):
+                    log_file.write(f"    XML inventory found. Amplitudes will be calculated in VEL.\n")
+                else:
+                    print(f"Warning: XML non trovato per {net}_{stat}. L'ampiezza rimarrà in Counts.")
+                    log_file.write(f"    Warning: XML not found for {net}_{stat}. Amplitude in Counts.\n")
                 # --- SALVATAGGIO CSV ---
                 pick_df = []
                 for p in outputs:
-                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream_vel)
+                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream, inv_path, log_file)
                     pick_df.append({
                         "station": stat,
                         "id": p.trace_id,
@@ -316,7 +310,8 @@ for day in range(start_day, end_day + 1):
                 print(f"Error on {stat}: {e}")
                 log_file.write(f"Error on {stat}: {e}\n")
 
-            del stream, annotations, classified, outputs
+            #del stream, annotations, classified, outputs
+            del stream, classified, outputs
             gc.collect() 
 
     # Sort CSV at the end of the day
