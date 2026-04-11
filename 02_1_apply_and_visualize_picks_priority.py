@@ -42,9 +42,9 @@ log_file.write("="*60 + "\n")
 # Start timing
 overall_start_time = time.time()
 
-def get_peak_amplitude(pick_time, stream_raw, inv_path, log_file, window_sec=2.0):
+def get_peak_amplitude(pick_time, stream_raw, inv, log_file, window_sec=2.0):
     """
-    Calcola l'ampiezza e logga eventuali errori sul singolo pick.
+    Calcola l'ampiezza usando l'inventario (inv) già caricato in memoria.
     """
     try:
         t = UTCDateTime(pick_time)
@@ -56,8 +56,8 @@ def get_peak_amplitude(pick_time, stream_raw, inv_path, log_file, window_sec=2.0
         st_wide.detrend("demean")
         st_wide.taper(max_percentage=0.05)
         
-        if os.path.exists(inv_path):
-            inv = read_inventory(inv_path)
+        # 3. Applica la risposta solo se l'oggetto 'inv' esiste
+        if inv is not None:
             pre_filt = [0.1, 0.5, 30.0, 40.0]
             st_wide.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
 
@@ -71,7 +71,6 @@ def get_peak_amplitude(pick_time, stream_raw, inv_path, log_file, window_sec=2.0
 
         return float(max_amp)
     except Exception as e:
-        # Se c'è un errore imprevisto, lo stampiamo e lo scriviamo nel log
         err_msg = f"    Error calculating amplitude for pick at {pick_time}: {e}"
         print(err_msg)
         log_file.write(err_msg + "\n")
@@ -282,16 +281,21 @@ for day in range(start_day, end_day + 1):
                     plt.close(fig) 
                     log_file.write(f"    Plot saved: {figure_filename}\n") """
                 inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
-                # --- CONTROLLO ESISTENZA XML ---
+                
+                # --- CARICAMENTO XML UNA TANTUM ---
+                inv = None  # Variabile vuota di default
                 if os.path.exists(inv_path):
+                    inv = read_inventory(inv_path) # Lo leggiamo dal disco UNA SOLA VOLTA!
                     log_file.write(f"    XML inventory found. Amplitudes will be calculated in VEL.\n")
                 else:
                     print(f"Warning: XML non trovato per {net}_{stat}. L'ampiezza rimarrà in Counts.")
                     log_file.write(f"    Warning: XML not found for {net}_{stat}. Amplitude in Counts.\n")
+
                 # --- SALVATAGGIO CSV ---
                 pick_df = []
                 for p in outputs:
-                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream, inv_path, log_file)
+                    # Passiamo l'oggetto 'inv' già letto in RAM invece del percorso
+                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream, inv, log_file)
                     pick_df.append({
                         "station": stat,
                         "id": p.trace_id,

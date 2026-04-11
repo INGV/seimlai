@@ -45,8 +45,8 @@ fdsn_clients = ["IRIS", "INGV"]
 
 # === Picking Parameters ===
 BATCH_SIZE = 256 #use 2048 for HPC cluster
-P_THRESHOLD = 0.1
-S_THRESHOLD = 0.1
+P_THRESHOLD = 0.9
+S_THRESHOLD = 0.9
 
 # === Model Configuration ===
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
