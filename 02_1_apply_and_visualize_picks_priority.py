@@ -42,27 +42,18 @@ log_file.write("="*60 + "\n")
 # Start timing
 overall_start_time = time.time()
 
-def get_peak_amplitude(pick_time, stream_raw, inv, log_file, window_sec=2.0):
+def get_peak_amplitude(pick_time, stream_vel, log_file, window_sec=2.0):
     """
-    Calcola l'ampiezza usando l'inventario (inv) già caricato in memoria.
+    Cerca l'ampiezza massima su una traccia già convertita in velocità (VEL).
     """
     try:
         t = UTCDateTime(pick_time)
-        st_wide = stream_raw.slice(t - 30.0, t + 30.0).copy()
-
-        if len(st_wide) == 0:
+        # Taglia direttamente i 3 secondi (1 prima, 2 dopo)
+        st_strict = stream_vel.slice(t - 1.0, t + window_sec)
+        
+        if len(st_strict) == 0:
             return np.nan
-
-        st_wide.detrend("demean")
-        st_wide.taper(max_percentage=0.05)
-        
-        # 3. Applica la risposta solo se l'oggetto 'inv' esiste
-        if inv is not None:
-            pre_filt = [0.1, 0.5, 30.0, 40.0]
-            st_wide.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
-
-        st_strict = st_wide.slice(t - 1.0, t + window_sec)
-        
+            
         max_amp = 0.0
         for tr in st_strict:
             tr_max = np.max(np.abs(tr.data))
@@ -172,6 +163,24 @@ for day in range(start_day, end_day + 1):
                 continue
 
             try:
+                # --- CONVERSIONE IN VELOCITÀ SU TUTTE LE 24 ORE (UNA VOLTA SOLA) ---
+                stream_vel = stream.copy()
+                stream_vel.detrend("demean")
+            
+                inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
+                if os.path.exists(inv_path):
+                    inv = read_inventory(inv_path)
+                    pre_filt = [0.1, 0.5, 30.0, 40.0]
+                    try:
+                        stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
+                        log_file.write("    Instrument response removed on full 24h stream.\n")
+                    except Exception as e:
+                        print(f"Error removing response on {stat}: {e}")
+                        log_file.write(f"    Error removing response on {stat}: {e}\n")
+                else:
+                    print(f"Warning: XML non trovato per {net}_{stat}. L'ampiezza rimarrà in Counts.")
+                    log_file.write(f"    Warning: XML not found for {net}_{stat}. Amplitude in Counts.\n")
+                
                 #log_file.write("    Running model.annotate()...\n")
                 #annotations = model.annotate(stream)
                 
@@ -280,22 +289,12 @@ for day in range(start_day, end_day + 1):
                     plt.savefig(figure_filename, bbox_inches='tight', format='pdf', dpi=300) 
                     plt.close(fig) 
                     log_file.write(f"    Plot saved: {figure_filename}\n") """
-                inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
                 
-                # --- CARICAMENTO XML UNA TANTUM ---
-                inv = None  # Variabile vuota di default
-                if os.path.exists(inv_path):
-                    inv = read_inventory(inv_path) # Lo leggiamo dal disco UNA SOLA VOLTA!
-                    log_file.write(f"    XML inventory found. Amplitudes will be calculated in VEL.\n")
-                else:
-                    print(f"Warning: XML non trovato per {net}_{stat}. L'ampiezza rimarrà in Counts.")
-                    log_file.write(f"    Warning: XML not found for {net}_{stat}. Amplitude in Counts.\n")
-
                 # --- SALVATAGGIO CSV ---
                 pick_df = []
                 for p in outputs:
                     # Passiamo l'oggetto 'inv' già letto in RAM invece del percorso
-                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream, inv, log_file)
+                    amp_val = get_peak_amplitude(p.peak_time.datetime, stream_vel, log_file)
                     pick_df.append({
                         "station": stat,
                         "id": p.trace_id,
