@@ -10,36 +10,13 @@ import os
 import gc
 import time
 import re
-import math
-from obspy import read, Stream, Trace, UTCDateTime, read_inventory
-from seisbench.models import PhaseNet
-import pandas as pd
-import numpy as np
-import torch
-import matplotlib.pyplot as plt 
-import matplotlib.dates as mdates 
-import matplotlib.gridspec as gridspec
-import numpy as np
-import os
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from config import *
 
-# --- CONFIGURAZIONE DEVICE & MODELLO ---
-# device, device_name e model sono importati da config.py
-print(f"Using {device_name} for processing.")
-print(f"Model loaded and ready on {device}")
-
-
-os.makedirs(output_picks_dir, exist_ok=True)
-#os.makedirs(plot_dir, exist_ok=True) 
-
-# --- LOGGING ---
-log_file = open(log_file_path, "w")
-log_file.write(f"PhaseNet Picking Log - Year: {year}, Days: {start_day} to {end_day}\n")
-log_file.write(f"Plotting segment length (WLENGTH_SECONDS): {WLENGTH_SECONDS} seconds\n")
-log_file.write("Hierarchy applied: HH > EH > BH\n")
-log_file.write("="*60 + "\n")
+import numpy as np
+import pandas as pd
+import torch
+from obspy import read, Stream, UTCDateTime, read_inventory
 
 # Start timing
 overall_start_time = time.time()
@@ -72,6 +49,9 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
 
 # --- FUNZIONE WORKER (Lavora in parallelo) ---
 def process_station_worker(args):
+    from config import BATCH_SIZE, P_THRESHOLD, S_THRESHOLD, model
+    # FRENO CPU: Evita l'ingorgo matematico tra i 16 worker attivi
+    torch.set_num_threads(1)
     net, stat, day, stat_path, inv_path, year = args
     logs = []  # Lista temporanea per i messaggi di questa specifica stazione
     pick_df_list = []
@@ -165,18 +145,34 @@ def process_station_worker(args):
 # --- MAIN SCRIPT ---
 # =====================================================================
 if __name__ == '__main__':
-    # Configurazione vitale per PyTorch e multiprocessing su CUDA
-    if device.type == "cuda":
-        try:
-            mp.set_start_method('spawn', force=True)
-        except RuntimeError:
-            pass
+    # 1. OBBLIGATORIO: Prepariamo il multiprocessing PRIMA di attivare la GPU
+    try:
+        mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass
 
+    # 2. SOLO ORA importiamo le directory e i parametri generali dal config
+    from config import *
+
+    os.makedirs(output_picks_dir, exist_ok=True)
+
+    log_file = open(log_file_path, "w")
+    log_file.write(f"PhaseNet Parallel Picking Log - Year: {year}, Days: {start_day} to {end_day}\n")
+    log_file.write("="*60 + "\n")
+
+    overall_start_time = time.time()
+
+    # 3. LETTURA RISORSE DI CALCOLO
     if device.type == "mps" or device.type == "cpu":
-        NUM_WORKERS = 2  # Freno a mano sul Mac: fa 1 stazione alla volta
+        NUM_WORKERS = 1  # Freno a mano per test su Mac
     else:
-        NUM_WORKERS = mp.cpu_count()  #Cluster
-    print(f"Avvio elaborazione parallela con {NUM_WORKERS} WORKERS!")
+        # Sul Cluster, legge dinamicamente i core che hai chiesto con #SBATCH
+        slurm_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', 4))
+        NUM_WORKERS = slurm_cpus
+
+    print(f"Avvio elaborazione parallela con {NUM_WORKERS} WORKERS!", flush=True)
+    log_file.write(f"Workers: {NUM_WORKERS}\n")
+
 
     for day in range(start_day, end_day + 1):
         log_file.write(f"\n--- Processing day: {day} ---\n")
