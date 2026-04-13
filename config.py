@@ -20,10 +20,10 @@ from pyproj import CRS, Transformer
 case_study_name = "Amatrice_catalog"
 # Set to a path (e.g. "/path/to/external/folder") to store all data and output there.
 # If None, the folder [case_study_name] will be created in the current directory.
-PERSONAL_FOLDER = None
+PERSONAL_FOLDER = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
 # Set to True to run the download script (01).
 # Set to False to skip it and use existing data if you have put yout own folder.
-DOWNLOAD_DATA = True 
+DOWNLOAD_DATA = False 
 
 # === Geographic Bounding Box ===
 minlatitude = 42.25
@@ -32,7 +32,7 @@ minlongitude = 11.75
 maxlongitude = 14.00
 
 # === Time Interval ===
-starttime = UTCDateTime("2016-10-31")
+starttime = UTCDateTime("2016-10-20")
 endtime = UTCDateTime("2016-10-31")
 year = 2016
 
@@ -45,8 +45,8 @@ fdsn_clients = ["IRIS", "INGV"]
 
 # === Picking Parameters ===
 BATCH_SIZE = 256 #use 2048 for HPC cluster
-P_THRESHOLD = 0.9
-S_THRESHOLD = 0.9
+P_THRESHOLD = 0.1
+S_THRESHOLD = 0.1
 
 # === Model Configuration ===
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
