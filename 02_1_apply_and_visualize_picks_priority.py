@@ -97,6 +97,16 @@ def process_station_worker(args):
                 except Exception as e:
                     logs.append(f"[{net}.{stat}] Errore lettura {fname}: {e}")
     
+    # ==========================================
+    # AGGIUNGI QUESTE RIGHE PER RISOLVERE I GAP
+    # ==========================================
+    try:
+        # Ricuce i frammenti riempiendo i vuoti temporali con zeri
+        stream.merge(method=1, fill_value=0)
+    except Exception as e:
+        logs.append(f"[{net}.{stat}] Errore durante il merge dei gap: {e}")
+    # ==========================================
+
     if len(stream) < 3:
         logs.append(f"[{net}.{stat}] Skipped: Non ha 3 componenti.")
         return pd.DataFrame(), logs
