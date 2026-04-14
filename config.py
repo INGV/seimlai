@@ -20,10 +20,10 @@ from pyproj import CRS, Transformer
 case_study_name = "Amatrice_catalog"
 # Set to a path (e.g. "/path/to/external/folder") to store all data and output there.
 # If None, the folder [case_study_name] will be created in the current directory.
-PERSONAL_FOLDER = None
+PERSONAL_FOLDER = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
 # Set to True to run the download script (01).
 # Set to False to skip it and use existing data if you have put yout own folder.
-DOWNLOAD_DATA = True 
+DOWNLOAD_DATA = False 
 
 # === Geographic Bounding Box ===
 minlatitude = 42.25
@@ -32,7 +32,7 @@ minlongitude = 11.75
 maxlongitude = 14.00
 
 # === Time Interval ===
-starttime = UTCDateTime("2016-10-31")
+starttime = UTCDateTime("2016-10-20")
 endtime = UTCDateTime("2016-10-31")
 year = 2016
 
@@ -44,9 +44,9 @@ stations_list = "*"
 fdsn_clients = ["IRIS", "INGV"]
 
 # === Picking Parameters ===
-BATCH_SIZE = 256
-P_THRESHOLD = 0.9
-S_THRESHOLD = 0.9
+BATCH_SIZE = 256 #use 2048 for HPC cluster
+P_THRESHOLD = 0.1
+S_THRESHOLD = 0.1
 
 # === Model Configuration ===
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
@@ -175,7 +175,7 @@ inventory_dir = os.path.join(project_root, "inventory")
 waveform_base = os.path.join(root_dir, str(year))  # where script 02+ reads from
 output_base = os.path.join(project_root, "output")
 output_picks_dir = os.path.join(output_base, f"output_picks_{P_THRESHOLD}")
-plot_dir = os.path.join(output_base, f"plots_annotations_{P_THRESHOLD}", f"{year}_{start_day:03d}_{end_day:03d}")
+#plot_dir = os.path.join(output_base, f"plots_annotations_{P_THRESHOLD}", f"{year}_{start_day:03d}_{end_day:03d}")
 log_file_path = os.path.join(output_base, "phase_picking_log.txt")  # used by scripts 02+
 # Used by script 04_1 for the output
 output_dir = os.path.join(output_base, f"output_catalog_{P_THRESHOLD}")
