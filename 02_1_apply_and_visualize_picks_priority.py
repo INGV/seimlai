@@ -97,15 +97,30 @@ def process_station_worker(args):
                 except Exception as e:
                     logs.append(f"[{net}.{stat}] Errore lettura {fname}: {e}")
     
-    # ==========================================
-    # AGGIUNGI QUESTE RIGHE PER RISOLVERE I GAP
-    # ==========================================
+     if len(stream) == 0:
+        return pd.DataFrame(), logs
+
+    # =========================================================
+    # SCUDO ANTI-ESPLOSIONE RAM (Protezione dai gap infiniti)
+    # =========================================================
+
     try:
-        # Ricuce i frammenti riempiendo i vuoti temporali con zeri
+        # 1. Definiamo i confini matematici esatti di QUESTA giornata (24 ore)
+        t_start = UTCDateTime(year=year, julday=day)
+        t_end = t_start + 86400.0  # 86400 secondi = 24 ore esatte
+
+        # 2. TAGLIAMO VIA i dati corrotti: teniamo solo i dati tra t_start e t_end
+        stream.trim(starttime=t_start, endtime=t_end)
+
+        # Se dopo aver tagliato via l'immondizia non è rimasto nulla, saltiamo
+        if len(stream) == 0:
+            logs.append(f"[{net}.{stat}] Skipped: Nessun dato valido per il giorno {day}.")
+            return pd.DataFrame(), logs
+
+        # 3. Ora che la traccia dura RIGOROSAMENTE al massimo 24 ore, 
+        # possiamo unire i buchi (merge) in totale sicurezza. La RAM è salva!
         stream.merge(method=1, fill_value=0)
-    except Exception as e:
-        logs.append(f"[{net}.{stat}] Errore durante il merge dei gap: {e}")
-    # ==========================================
+
 
     if len(stream) < 3:
         logs.append(f"[{net}.{stat}] Skipped: Non ha 3 componenti.")
