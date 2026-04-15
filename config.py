@@ -51,10 +51,10 @@ S_THRESHOLD = 0.1
 # === Model Configuration ===
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
 # Set to None if you want to load a custom model from CUSTOM_MODEL_PATH.
-MODEL_TYPE = 'original'
+MODEL_TYPE = None
 # Path to a custom fine-tuned model weights file (.pth).
 # Set to None to use the pretrained model specified by MODEL_TYPE.
-CUSTOM_MODEL_PATH = None  # e.g. "/path/to/your/model.pth"
+CUSTOM_MODEL_PATH = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_EP41_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"  # e.g. "/path/to/your/model.pth"
 
 # === Plotting Parameters ===
 # LUNGHEZZA DELLA FINESTRA DI VISUALIZZAZIONE PER SUBPLOT (in secondi)
@@ -203,7 +203,17 @@ if CUSTOM_MODEL_PATH is not None:
     model = PhaseNet()
     model.labels = "PSN"
     import torch as _torch
-    model.load_state_dict(_torch.load(CUSTOM_MODEL_PATH, map_location=device))
+    
+    # Carica il file .pth
+    checkpoint = _torch.load(CUSTOM_MODEL_PATH, map_location=device)
+    
+    # Se il file è un checkpoint, estrae solo i pesi del modello. 
+    # Altrimenti, carica il file direttamente.
+    if "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
+        
     print(f"Custom model loaded from: {CUSTOM_MODEL_PATH}")
 else:
     model = PhaseNet.from_pretrained(MODEL_TYPE)
