@@ -46,17 +46,25 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
         logs.append(err_msg)
         return np.nan
 
-
-# --- FUNZIONE WORKER (Lavora in parallelo) ---
+# =====================================================================
+# --- 2. FUNZIONE WORKER (Eseguita dai singoli core) ---
+# =====================================================================
 def process_station_worker(args):
+    # 1. IMPORT LOCALE
     from config import BATCH_SIZE, P_THRESHOLD, S_THRESHOLD, model
-    # FRENO CPU: Evita l'ingorgo matematico tra i 16 worker attivi
+    
+    # 2. FRENO CPU
+    import torch
     torch.set_num_threads(1)
+    
     net, stat, day, stat_path, inv_path, year = args
-    logs = []  # Lista temporanea per i messaggi di questa specifica stazione
+    logs = []
     pick_df_list = []
     
-    logs.append(f"[{net}.{stat}], Giorno {day}, Inizio elaborazione...")
+    # STAMPA LIVE
+    print(f"🔄 [Worker] -> Sto processando la stazione: {net}.{stat} (Giorno {day})", flush=True)
+    logs.append(f"[{net}.{stat}] Inizio elaborazione...")
+    
     stream = Stream()
 
     # === SELEZIONE GERARCHICA CANALI ===
@@ -84,6 +92,7 @@ def process_station_worker(args):
         subdir_list.sort(key=lambda x: x[0])
         selected_subdirs.append(subdir_list[0][1])
 
+    # === LETTURA FILE SISMICI ===
     for subdir in selected_subdirs:
         full_path = os.path.join(stat_path, subdir)
         if os.path.isdir(full_path):
@@ -96,38 +105,84 @@ def process_station_worker(args):
                             stream += read(os.path.join(full_path, fname))
                 except Exception as e:
                     logs.append(f"[{net}.{stat}] Errore lettura {fname}: {e}")
-    
-    # ==========================================
-    # AGGIUNGI QUESTE RIGHE PER RISOLVERE I GAP
-    # ==========================================
-    try:
-        # Ricuce i frammenti riempiendo i vuoti temporali con zeri
-        stream.merge(method=1, fill_value=0)
-    except Exception as e:
-        logs.append(f"[{net}.{stat}] Errore durante il merge dei gap: {e}")
-    # ==========================================
 
+    # Se non ha letto nulla, restituisce subito liste vuote
+    if len(stream) == 0:
+        return pd.DataFrame(), logs
+
+    # =========================================================
+    #  1. SCUDO MORBIDO SUI GAP (Salva dati buoni e RAM)
+    # =========================================================
+    try:
+        stream.sort()
+        # Misuriamo la lunghezza totale dei dati
+        t_start = stream[0].stats.starttime
+        t_end = stream[-1].stats.endtime
+        durata_ore = (t_end - t_start) / 3600.0
+
+        # Mettiamo un limite di "sopravvivenza" largo (48 ore) per gestire i file enormi a cavallo di mezzanotte
+        if durata_ore <= 48.0:
+            stream.merge(method=1, fill_value=0)
+        else:
+            logs.append(f"[{net}.{stat}] SKIP: Dati corrotti (Durata: {durata_ore:.1f}h). Rischio OOM!")
+            return pd.DataFrame(), logs
+            
+    except Exception as e:
+        logs.append(f"[{net}.{stat}] Errore durante il controllo/merge: {e}")
+        return pd.DataFrame(), logs
+    # =========================================================
+
+    # Se dopo il merge non abbiamo le 3 componenti sane, saltiamo la stazione
     if len(stream) < 3:
         logs.append(f"[{net}.{stat}] Skipped: Non ha 3 componenti.")
         return pd.DataFrame(), logs
 
     try:
-        # Rimozione Risposta Strumentale
+        # === RIMOZIONE RISPOSTA STRUMENTALE ===
         stream_vel = stream.copy()
         stream_vel.detrend("demean")
     
         if os.path.exists(inv_path):
+            from obspy import read_inventory
             inv = read_inventory(inv_path)
+            
+            # =========================================================
+            # 2. SOLUZIONE GENERALIZZATA PER METADATI DISALLINEATI
+            # =========================================================
+            original_channels = []
+            for tr in stream_vel:
+                original_channels.append(tr.stats.channel)
+                comp = tr.stats.channel[-1]  # Estrae Z, N, o E
+                
+                # Lista di tutti i canali validi dentro l'XML
+                xml_channels = [c.code for n in inv for s in n for c in s]
+                
+                # Se il canale (es. HHZ) non è nell'XML, cerca un sostituto (es. EHZ)
+                if tr.stats.channel not in xml_channels:
+                    fallback = [c for c in xml_channels if c.endswith(comp)]
+                    if fallback:
+                        tr.stats.channel = fallback[0] # Rinomina temporaneamente
+
+            # Applica la correzione con water_level per maggiore stabilità
             pre_filt = [0.1, 0.5, 30.0, 40.0]
-            stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt)
+            try:
+                stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt, water_level=60)
+            except Exception as e:
+                logs.append(f"[{net}.{stat}] Errore remove_response: {e}. Provo senza risposta.")
+            
+            # Ripristina i nomi originali (es. HHZ) per la rete neurale
+            for i, tr in enumerate(stream_vel):
+                tr.stats.channel = original_channels[i]
+            # =========================================================
+                
         else:
             logs.append(f"[{net}.{stat}] Warning: XML non trovato. Ampiezza in Counts.")
 
-        # Rete Neurale (model, BATCH_SIZE, P_THRESHOLD, S_THRESHOLD vengono presi da config.py)
+        # === INFERENZA RETE NEURALE ===
         classified = model.classify(stream, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
         outputs = classified.picks
         
-        # Calcolo ampiezze e salvataggio locale
+        # === ESTRAZIONE AMPIEZZE ===
         for p in outputs:
             amp_val = get_peak_amplitude(p.peak_time.datetime, stream_vel, logs)
             pick_df_list.append({
@@ -142,11 +197,12 @@ def process_station_worker(args):
         logs.append(f"[{net}.{stat}] Completato. Trovati {len(pick_df_list)} picks.")
 
     except Exception as e:
-        logs.append(f"[{net}.{stat}] Errore su {stat}: {e}")
+        logs.append(f"[{net}.{stat}] Errore fatale su {stat}: {e}")
 
-    # Pulizia RAM
+    # === PULIZIA MEMORIA RAM ===
     del stream, stream_vel
     if 'classified' in locals(): del classified, outputs
+    import gc
     gc.collect()
 
     return pd.DataFrame(pick_df_list), logs
