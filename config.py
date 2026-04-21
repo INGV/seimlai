@@ -9,7 +9,7 @@ import os
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 import torch
-from seisbench.models import PhaseNet
+from seisbench.models import PhaseNet, EQTransformer
 from pyproj import CRS, Transformer
 
 # ==========================================
@@ -20,10 +20,10 @@ from pyproj import CRS, Transformer
 case_study_name = "Amatrice_catalog"
 # Set to a path (e.g. "/path/to/external/folder") to store all data and output there.
 # If None, the folder [case_study_name] will be created in the current directory.
-PERSONAL_FOLDER = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
+PERSONAL_FOLDER = None
 # Set to True to run the download script (01).
 # Set to False to skip it and use existing data if you have put yout own folder.
-DOWNLOAD_DATA = False 
+DOWNLOAD_DATA = True 
 
 # === Geographic Bounding Box ===
 minlatitude = 42.25
@@ -54,7 +54,11 @@ S_THRESHOLD = 0.1
 MODEL_TYPE = None
 # Path to a custom fine-tuned model weights file (.pth).
 # Set to None to use the pretrained model specified by MODEL_TYPE.
-CUSTOM_MODEL_PATH = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/PROVE/ULTIMI_RUN/TESTATO_EP41_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"  # e.g. "/path/to/your/model.pth"
+CUSTOM_MODEL_PATH = None
+#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_4096_bs_0.0001_lr_std_norm.AQ2009_transferlearning_focalloss_20250627_143520_/model_weights_60.pth"
+#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_20250630_235651_/model_weights_25.pth"
+#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_20250627_143934_/model_weights_60.pth"
+#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"  # e.g. "/path/to/your/model.pth"
 
 # === Plotting Parameters ===
 # LUNGHEZZA DELLA FINESTRA DI VISUALIZZAZIONE PER SUBPLOT (in secondi)
@@ -214,9 +218,21 @@ if CUSTOM_MODEL_PATH is not None:
     else:
         model.load_state_dict(checkpoint)
         
+    
+    # Carica il file .pth
+    checkpoint = _torch.load(CUSTOM_MODEL_PATH, map_location=device)
+    
+    # Se il file è un checkpoint, estrae solo i pesi del modello. 
+    # Altrimenti, carica il file direttamente.
+    if "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
+        
     print(f"Custom model loaded from: {CUSTOM_MODEL_PATH}")
 else:
-    model = PhaseNet.from_pretrained(MODEL_TYPE)
+    model = EQTransformer.from_pretrained(MODEL_TYPE)
+    #model = PhaseNet.from_pretrained(MODEL_TYPE)
     print(f"Pretrained model loaded: PhaseNet '{MODEL_TYPE}'")
 model.to(device)
 model.eval()
