@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# Picks P- and S- wave arrival times for each stations. 
-# Uses PhaseNet with Seisbench.
-# Optimized to handle channel hierarchy (HH > EH > BH) and non-standard components (1, 2).
-
-# import libraries
+# =====================================================================
+# --- LIBRERIE ESTERNE ---
+# =====================================================================
 import os
 import gc
 import time
@@ -18,13 +16,14 @@ import pandas as pd
 import torch
 from obspy import read, Stream, UTCDateTime, read_inventory
 
-# Start timing
-overall_start_time = time.time()
 
+# =====================================================================
+# --- 1. FUNZIONI DI SUPPORTO ---
+# =====================================================================
 def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
     """
     Cerca l'ampiezza massima su una traccia già convertita in velocità (VEL).
-    Salva eventuali errori nella lista 'logs' invece che direttamente sul file.
+    Salva gli errori in 'logs' per non creare conflitti tra i core in scrittura.
     """
     try:
         t = UTCDateTime(pick_time)
@@ -42,19 +41,19 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
         return float(max_amp)
     except Exception as e:
         err_msg = f"    Error calculating amplitude for pick at {pick_time}: {e}"
-        print(err_msg)
         logs.append(err_msg)
         return np.nan
+
 
 # =====================================================================
 # --- 2. FUNZIONE WORKER (Eseguita dai singoli core) ---
 # =====================================================================
 def process_station_worker(args):
-    # 1. IMPORT LOCALE
+    # IMPORT LOCALE: Il worker carica dal config solo i parametri del modello.
+    # Questo permette alla GPU di attivarsi in totale sicurezza per ogni processo.
     from config import BATCH_SIZE, P_THRESHOLD, S_THRESHOLD, model
     
-    # 2. FRENO CPU
-    import torch
+    # FRENO CPU: Evita l'ingorgo matematico tra i 16 worker attivi
     torch.set_num_threads(1)
     
     net, stat, day, stat_path, inv_path, year = args
@@ -67,7 +66,7 @@ def process_station_worker(args):
     
     stream = Stream()
 
-    # === SELEZIONE GERARCHICA CANALI ===
+    # === SELEZIONE GERARCHICA CANALI (HH > EH > BH) ===
     all_subdirs = [d for d in os.listdir(stat_path) if d.endswith(".D")]
     candidates = {}
     
@@ -92,6 +91,7 @@ def process_station_worker(args):
         subdir_list.sort(key=lambda x: x[0])
         selected_subdirs.append(subdir_list[0][1])
 
+    # === LETTURA FILE SISMICI ===
     # === LETTURA FILE SISMICI ===
     for subdir in selected_subdirs:
         full_path = os.path.join(stat_path, subdir)
@@ -136,52 +136,70 @@ def process_station_worker(args):
     if len(stream) < 3:
         logs.append(f"[{net}.{stat}] Skipped: Non ha 3 componenti.")
         return pd.DataFrame(), logs
-
     try:
+        # === RIMOZIONE RISPOSTA STRUMENTALE ===
         # === RIMOZIONE RISPOSTA STRUMENTALE ===
         stream_vel = stream.copy()
         stream_vel.detrend("demean")
-    
-        if os.path.exists(inv_path):
+
+        # =========================================================
+        # ✨ 3. RICERCA ESATTA DELL'XML CON STAMPA LIVE
+        # =========================================================
+        xml_reale = None
+        cartella_xml = os.path.dirname(inv_path)
+        nome_esatto_xml = f"{net}.{stat}.xml" # Es: 3A.MZ09.xml
+
+        if os.path.exists(cartella_xml):
+            for f in os.listdir(cartella_xml):
+                # Il nome del file deve essere ESATTAMENTE quello che cerchiamo
+                if f == nome_esatto_xml:
+                    xml_reale = os.path.join(cartella_xml, f)
+                    break
+
+        if xml_reale is not None:
             from obspy import read_inventory
-            inv = read_inventory(inv_path)
-            
-            # =========================================================
-            # 2. SOLUZIONE GENERALIZZATA PER METADATI DISALLINEATI
-            # =========================================================
+            inv = read_inventory(xml_reale)
+
+            # --- SOLUZIONE GENERALIZZATA ---
             original_channels = []
             for tr in stream_vel:
                 original_channels.append(tr.stats.channel)
-                comp = tr.stats.channel[-1]  # Estrae Z, N, o E
-                
-                # Lista di tutti i canali validi dentro l'XML
+                comp = tr.stats.channel[-1]
+
                 xml_channels = [c.code for n in inv for s in n for c in s]
-                
-                # Se il canale (es. HHZ) non è nell'XML, cerca un sostituto (es. EHZ)
+
                 if tr.stats.channel not in xml_channels:
                     fallback = [c for c in xml_channels if c.endswith(comp)]
                     if fallback:
-                        tr.stats.channel = fallback[0] # Rinomina temporaneamente
+                        tr.stats.channel = fallback[0]
 
-            # Applica la correzione con water_level per maggiore stabilità
             pre_filt = [0.1, 0.5, 30.0, 40.0]
             try:
                 stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt, water_level=60)
+
+                # STAMPA LIVE: SUCCESSO!
+                nome_file_trovato = os.path.basename(xml_reale)
+                print(f"[XML] {net}.{stat} -> Trovato ({nome_file_trovato}) | Convertito in VEL (m/s)", flush=True)
+
             except Exception as e:
                 logs.append(f"[{net}.{stat}] Errore remove_response: {e}. Provo senza risposta.")
-            
-            # Ripristina i nomi originali (es. HHZ) per la rete neurale
+                # STAMPA LIVE: ERRORE MATEMATICO (Es. XML corrotto all'interno)
+                print(f"[XML] {net}.{stat} -> Trovato ({nome_file_trovato}), ma Errore Matematico | Mantenuto in Counts", flush=True)
+
             for i, tr in enumerate(stream_vel):
                 tr.stats.channel = original_channels[i]
-            # =========================================================
-                
-        else:
-            logs.append(f"[{net}.{stat}] Warning: XML non trovato. Ampiezza in Counts.")
 
+        else:
+            logs.append(f"[{net}.{stat}] Warning: XML {nome_esatto_xml} non trovato in {cartella_xml}. Ampiezza in Counts.")
+            # STAMPA LIVE: FILE MANCANTE
+            print(f" [XML] {net}.{stat} -> {nome_esatto_xml} NON TROVATO | Mantenuto in Counts", flush=True)
+
+        # === INFERENZA RETE NEURALE ===
         # === INFERENZA RETE NEURALE ===
         classified = model.classify(stream, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
         outputs = classified.picks
         
+        # === ESTRAZIONE AMPIEZZE ===
         # === ESTRAZIONE AMPIEZZE ===
         for p in outputs:
             amp_val = get_peak_amplitude(p.peak_time.datetime, stream_vel, logs)
@@ -207,8 +225,9 @@ def process_station_worker(args):
 
     return pd.DataFrame(pick_df_list), logs
 
+
 # =====================================================================
-# --- MAIN SCRIPT ---
+# --- 3. MAIN SCRIPT (Il "Direttore d'orchestra") ---
 # =====================================================================
 if __name__ == '__main__':
     # 1. OBBLIGATORIO: Prepariamo il multiprocessing PRIMA di attivare la GPU
@@ -230,7 +249,7 @@ if __name__ == '__main__':
 
     # 3. LETTURA RISORSE DI CALCOLO
     if device.type == "mps" or device.type == "cpu":
-        NUM_WORKERS = 1  # Freno a mano per test su Mac
+        NUM_WORKERS = 2  # Freno a mano per test su Mac
     else:
         # Sul Cluster, legge dinamicamente i core che hai chiesto con #SBATCH
         slurm_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', 4))
@@ -239,10 +258,10 @@ if __name__ == '__main__':
     print(f"Avvio elaborazione parallela con {NUM_WORKERS} WORKERS!", flush=True)
     log_file.write(f"Workers: {NUM_WORKERS}\n")
 
-
+    # 4. CICLO SUI GIORNI
     for day in range(start_day, end_day + 1):
         log_file.write(f"\n--- Processing day: {day} ---\n")
-        print(f"\nProcessing day: {day}")
+        print(f"\nProcessing day: {day}", flush=True)
         
         daily_csv = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
         if os.path.exists(daily_csv):
@@ -251,7 +270,7 @@ if __name__ == '__main__':
         if not os.path.exists(waveform_base):
             continue
 
-        # 1. Creiamo la lista delle stazioni da processare
+        # Preparazione dei pacchetti di lavoro (tasks) per le stazioni
         tasks = []
         for net in sorted(os.listdir(waveform_base)):
             net_path = os.path.join(waveform_base, net)
@@ -264,35 +283,37 @@ if __name__ == '__main__':
                 inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
                 tasks.append((net, stat, day, stat_path, inv_path, year))
 
-        # 2. Eseguiamo il calcolo in parallelo su tutti i core
+        # Esecuzione in parallelo
         all_daily_picks = []
         with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
             futures = {executor.submit(process_station_worker, task): task for task in tasks}
             
+            # Man mano che i worker finiscono, si raccolgono i risultati
             for future in as_completed(futures):
                 df_station, worker_logs = future.result()
                 
-                # Scriviamo i log in modo sicuro e in ordine
+                # Salvataggio nel file log di tutto il lavoro della stazione
                 for msg in worker_logs:
                     log_file.write(msg + "\n")
-                    print(msg) 
                 
                 if not df_station.empty:
                     all_daily_picks.append(df_station)
 
-        # 3. Alla fine della giornata, salviamo tutto nel CSV
+        # Salvataggio unico a fine giornata nel CSV
         if all_daily_picks:
             try:
                 final_daily_df = pd.concat(all_daily_picks, ignore_index=True)
                 final_daily_df = final_daily_df.sort_values("timestamp")
                 final_daily_df.to_csv(daily_csv, index=False)
-                log_file.write(f"Daily CSV sorted and saved: {daily_csv}\n")
+                log_file.write(f"Daily CSV sorted and saved: {daily_csv} with {len(final_daily_df)} picks.\n")
+                print(f"Giorno {day} completato: {len(final_daily_df)} picks trovati.", flush=True)
             except Exception as e:
                 log_file.write(f"Error sorting/saving daily CSV: {e}\n")
 
+    # 5. CHIUSURA
     overall_end_time = time.time()
     total_duration = overall_end_time - overall_start_time
-    print(f"\nTotal picking time: {total_duration:.2f} seconds")
+    print(f"\nTotal picking time: {total_duration:.2f} seconds", flush=True)
     log_file.write("="*60 + "\n")
     log_file.write(f"Total picking time: {total_duration:.2f} seconds\n")
     log_file.close()
