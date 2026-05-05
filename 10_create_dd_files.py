@@ -98,34 +98,67 @@ def read_data_file(filepath, skiprows, names_count):
         sys.exit(1)
 
 
-def generate_sequential_ids():
+def generate_valid_event_ids():
     """
-    Generates a sequential ID (1, 2, 3, ...) by counting the exact event delimiter 
-    'earthquake location' in the location-1D.out file.
+    Generates the original OUT event IDs that correspond to VALID events
+    actually written in the location quality workflow.
+
+    Important:
+    FILE_OUT may contain extra 'earthquake location' blocks that are failed
+    attempts (for example blocks with NaN / IEEE_INVALID_FLAG and no
+    'date origin ...' summary). Those blocks are counted by a naive grep but
+    do NOT correspond to rows in FILE_LOC. If we assign IDs by counting every
+    'earthquake location', the IDs drift after the first failed block.
+
+    This function counts every 'earthquake location' as an original OUT event
+    number, but only keeps the ones that also contain a 'date origin ...'
+    header before the next earthquake block.
     """
-    print(f"3. Generating sequential IDs from {FILE_OUT}...")
-    
-    ids = []
-    current_id = 0
-    
+    print(f"3. Generating valid event IDs from {FILE_OUT}...")
+
+    valid_ids = []
+    current_out_event_id = 0
+
     if not os.path.exists(FILE_OUT):
         print(f"ERROR: OUT file not found: {FILE_OUT}")
         sys.exit(1)
 
     try:
         with open(FILE_OUT, 'r') as f:
-            for line in f:
-                # Usa la stringa esatta identificata: "earthquake location"
-                if "earthquake location" in line:
-                    current_id += 1
-                    ids.append(current_id)
-                        
+            lines = f.readlines()
     except IOError as e:
         print(f"ERROR reading {FILE_OUT}: {e}")
         sys.exit(1)
 
-    print(f"   Generated {len(ids)} sequential IDs.")
-    return ids
+    i = 0
+    n_lines = len(lines)
+
+    while i < n_lines:
+        line = lines[i]
+
+        if "earthquake location" in line:
+            current_out_event_id += 1
+            found_date_origin = False
+
+            j = i + 1
+            while j < n_lines:
+                if "earthquake location" in lines[j]:
+                    break
+
+                low = lines[j].lower()
+                if ("date" in low and "origin" in low and
+                        "lat" in low and "long" in low):
+                    found_date_origin = True
+                    break
+                j += 1
+
+            if found_date_origin:
+                valid_ids.append(current_out_event_id)
+
+        i += 1
+
+    print(f"   Found {len(valid_ids)} valid OUT event IDs.")
+    return valid_ids
 
 
 # --- 3. Read phs file anche match the ID---
@@ -154,7 +187,7 @@ def read_and_filter_data():
     ].copy()
 
     # --- Generazione e Assegnazione ID ---
-    all_original_ids = generate_sequential_ids()
+    all_original_ids = generate_valid_event_ids()
     len_loc = len(df_loc)
     len_ids = len(all_original_ids)
     min_len = min(len_loc, len_ids)
@@ -315,6 +348,11 @@ def read_and_filter_data():
     ).drop(columns=['PHS_ID', 'PHS_ID_Match']).copy()
     
     print(f"   Total phases matched to final events: {len(df_phs_final)}")
+    sample_debug_ids = [1594, 1595, 1596, 2965, 2966, 2967]
+    sample_matches = df_loc_final[df_loc_final['ID'].isin(sample_debug_ids)][['T', 'ID']].copy()
+    if not sample_matches.empty:
+        print("   DEBUG sample mapped event IDs from quality:")
+        print(sample_matches.to_string(index=False))
     print("-" * 40)
     
     
