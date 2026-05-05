@@ -79,3 +79,5 @@ output_path = os.path.join(h71_filtered_dir, "all.he")
 with open(output_path, "w") as f:
     for line in lines:
         f.write(line + "\n")
+"""Makes the folder for the part2 which is from script 08-12"""
+os.makedirs(dd_dir, exist_ok=True)

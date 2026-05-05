@@ -11,30 +11,23 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+from config import (THR, location_1d_quality_path, location_1d_out_path,
+                    phs_file_path, stations_csv_path, dd_output_file,
+                    dd_station_file, DD_MAX_GAP, DD_MAX_RMS, DD_MAX_ERH, DD_MAX_ERZ)
 
-# --- 1. Configuration (Mantieni i tuoi percorsi) ---
-THR='01-01'
-BASE_DIR= '/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PRETRAINED_ORIGINAL'
-FILE_LOC = f'{BASE_DIR}/location-1D_{THR}.quality'
-FILE_OUT = f'{BASE_DIR}/location-1D_{THR}.out' 
-FILE_PHS=f"{BASE_DIR}/output/output_catalog/filtered_data/out_conv.phs"
-#FILE_PHS=f"{BASE_DIR}/output_03P_02S_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_/output_catalog/filtered_data/out_conv.phs"
-#FILE_PHS = f'{BASE_DIR}/output/output_catalog_{THR}/filtered_data/out_conv.phs'
-STATIONS_FILE = '/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/stations.csv'
-
-
-# Estrae il percorso della directory da FILE_PHS
-PHS_DIR = os.path.dirname(FILE_PHS)
-OUTPUT_FILENAME = f"travel_{THR}.dat"
-# Unisce il percorso della directory con il nome del file di output
-OUTPUT_FILE = os.path.join(PHS_DIR, OUTPUT_FILENAME)
-STATION_FILE = os.path.join(PHS_DIR, f"station_{THR}.dat")
+# --- 1. Configuration (from config.py) ---
+FILE_LOC = location_1d_quality_path
+FILE_OUT = location_1d_out_path
+FILE_PHS = phs_file_path
+STATIONS_FILE = stations_csv_path
+OUTPUT_FILE = dd_output_file
+STATION_FILE = dd_station_file
 
 # Filtering criteria
-MAX_GAP = 180.0
-MAX_RMS = 0.4    # RMS_HYPO < 0.6
-MAX_ERH = 0.8 #1.5
-MAX_ERZ = 0.8
+MAX_GAP = DD_MAX_GAP
+MAX_RMS = DD_MAX_RMS
+MAX_ERH = DD_MAX_ERH
+MAX_ERZ = DD_MAX_ERZ
 
 # Mappatura dei pesi richiesta per l'output di hypoDD
 WEIGHT_MAP = {

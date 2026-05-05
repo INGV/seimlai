@@ -206,13 +206,13 @@ def main(in_file, out_file):
     print(f"Wrote {len(events)} events to {out_file}")
 
 if __name__ == "__main__":
-    # Percorsi di default come da codice originale
-    default_in = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/RELOC_HYPOELLIPSE/location-1D.out"
-    default_out = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/RELOC_HYPOELLIPSE/location-1D.quality"
+    from config import location_1d_out_path, location_1d_quality_path
 
-    if len(sys.argv) < 3:
-        in_file, out_file = default_in, default_out
-    else:
+    if len(sys.argv) >= 3:
         in_file, out_file = sys.argv[1], sys.argv[2]
+    else:
+        in_file = location_1d_out_path
+        out_file = location_1d_quality_path
 
     main(in_file, out_file)
+

@@ -3,6 +3,10 @@
 """
 Configuration file for all scripts.
 Contains environment variables, paths, and parameters shared across the pipeline.
+
+Structure:
+  1. USER CONFIGURATION — All variables the user must set, ordered by script.
+  2. SYSTEM VARIABLES   — Everything derived automatically (paths, device, model).
 """
 
 import os
@@ -12,11 +16,11 @@ import torch
 from seisbench.models import PhaseNet, EQTransformer
 from pyproj import CRS, Transformer
 
-# ==========================================
-# 1. USER CONFIGURATION
-# ==========================================
+# =====================================================================
+# 1. USER CONFIGURATION (ordered by script)
+# =====================================================================
 
-# === Case Study ===
+# --- General / Case Study ---
 case_study_name = "Amatrice_catalog"
 # Set to a path (e.g. "/path/to/external/folder") to store all data and output there.
 # If None, the folder [case_study_name] will be created in the current directory.
@@ -25,33 +29,28 @@ PERSONAL_FOLDER = None
 # Set to False to skip it and use existing data if you have put yout own folder.
 DOWNLOAD_DATA = True 
 
-# === Geographic Bounding Box ===
+# --- Geographic Bounding Box (scripts 01, 04_1) ---
 minlatitude = 42.25
 maxlatitude = 43.12
 minlongitude = 11.75
 maxlongitude = 14.00
 
-# === Time Interval ===
-starttime = UTCDateTime("2016-10-20")
+# --- Time Interval (scripts 01, 02, …) ---
+starttime = UTCDateTime("2016-10-26")
 endtime = UTCDateTime("2016-10-31")
 year = 2016
 
-# === Station Parameters ===
+# --- Station Parameters (script 01) ---
 network = "*"                # network code
 channel = "BH?,HH?,EH?"      # channel types
 stations_list = "*"
 # fdsn_clients = ["INGV", "IRIS"]
-fdsn_clients = ["IRIS", "INGV"]
+fdsn_clients = ["IRIS"]
 
-# === Picking Parameters ===
-BATCH_SIZE = 256 #use 2048 for HPC cluster
-P_THRESHOLD = 0.1
-S_THRESHOLD = 0.1
-
-# === Model Configuration ===
+# --- Model Configuration (script 02) ---
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
 # Set to None if you want to load a custom model from CUSTOM_MODEL_PATH.
-MODEL_TYPE = None
+MODEL_TYPE = 'original'
 # Path to a custom fine-tuned model weights file (.pth).
 # Set to None to use the pretrained model specified by MODEL_TYPE.
 CUSTOM_MODEL_PATH = None
@@ -60,15 +59,19 @@ CUSTOM_MODEL_PATH = None
 #CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_20250627_143934_/model_weights_60.pth"
 #CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"  # e.g. "/path/to/your/model.pth"
 
-# === Plotting Parameters ===
+# --- Picking Parameters (script 02) ---
+BATCH_SIZE = 256 #use 2048 for HPC cluster
+P_THRESHOLD = 0.1
+S_THRESHOLD = 0.1
+
+# --- Plotting Parameters (script 02) ---
 # LUNGHEZZA DELLA FINESTRA DI VISUALIZZAZIONE PER SUBPLOT (in secondi)
 WLENGTH_SECONDS = 900 # 30 min
+
 # =====================================================================
-# GAMMA CONFIGURATION
+# GAMMA CONFIGURATION (script 04_1)
 # =====================================================================
-    
-    
-# SET GaMMA PARAMETERS
+
 # Define coordinate systems 
 wgs84 = CRS.from_epsg(4326)  # Latitude/Longitude
 utm33n = CRS.from_epsg(32633)  # UTM zone 33N (only for Central Italy)
@@ -80,9 +83,9 @@ config = {}
 config["dims"] = ['x(km)', 'y(km)', 'z(km)']
 config["use_dbscan"] = True
 config["use_amplitude"] = True
-config["x(km)"] = (250, 600)
-config["y(km)"] = (4100, 5000)
-config["z(km)"] = (0, 150)
+config["x(km)"] = (230, 620)   # adjust to actual values
+config["y(km)"] = (4650, 4800) # adjust to actual values
+config["z(km)"] = (0, 60)      # 150 km is too deep for Amatrice
 config["vel"] = {"p": 7.0, "s": 7.0 / 1.75}  # We assume rather high velocities as we expect deeper events
 config["method"] = "BGMM"
 if config["method"] == "BGMM":
@@ -92,10 +95,10 @@ if config["method"] == "GMM":
     
 # DBSCAN
 config["bfgs_bounds"] = (
-    (config["x(km)"][0] - 1, config["x(km)"][1] + 1),  # x
-    (config["y(km)"][0] - 1, config["y(km)"][1] + 1),  # y
-    (0, config["z(km)"][1] + 1),  # x
-    (None, None),  # t
+    (config["x(km)"][0] - 1, config["x(km)"][1] + 1),
+    (config["y(km)"][0] - 1, config["y(km)"][1] + 1),
+    (0, config["z(km)"][1] + 1),
+    (None, None),
 )
 #config["dbscan_eps"] = estimate_eps(stations, config["vel"]["p"]) 
 config["dbscan_eps"] = 25  # seconds
@@ -117,37 +120,66 @@ config["min_s_picks_per_eq"] = 3
 config["max_sigma11"] = 1.5 # second
 config["max_sigma22"] = 1.0 # log10(m/s)
 config["max_sigma12"] = 1.0 # covariance
-# === PyGMT Configuration ===
+
+# --- Script 04_2 Parameters ---
+analysis_log_filename = "analisi_picking.log"
+
+# --- Script 04_3 Parameters (PyGMT) ---
 # Define the path to your GMT library if it's not in the default system path.
 GMT_LIBRARY_PATH = os.environ.get("GMT_LIBRARY_PATH", "")
 # Path to local topography grid file or a PyGMT remote dataset (e.g., "@earth_relief_15s")
 GMT_GRID_PATH = os.environ.get("GMT_GRID_PATH", "@earth_relief_15s")
-
-# === Script 04_2 Parameters ===
-analysis_log_filename = "analisi_picking.log"
-# === Script 04_3 Parameters ===
 # Map region [min_lon, max_lon, min_lat, max_lat]
 plot_region = [12.5, 14.00, 42.00, 43.50]
 # Map title
 plot_map_title = "Central Italy - Seismicity"
 
-# === Script 05 Parameters ===
+# --- Script 05 Parameters ---
 # Minimum number of P picks per event for Hypoellipse filtering
 h71_min_p = 4
 # Minimum number of S picks per event for Hypoellipse filtering
 h71_min_s = 2
 
+# --- Script 10 Parameters ---
+# Filtering criteria for hypoDD file generation
+DD_MAX_GAP = 180.0
+DD_MAX_RMS = 0.4
+DD_MAX_ERH = 0.8
+DD_MAX_ERZ = 0.8
+
+# --- Script 11 Parameters ---
+MAX_DIST_KM_CC = 3.0       # Maximum distance between event pairs for CC (km)
+CC_THRESHOLD_11 = 0.7      # Minimum cross-correlation coefficient
+WIN_BEFORE_CC = 0.2        # Window before pick (s)
+WIN_AFTER_CC = 0.8         # Window after pick (s)
+CC_MAX_LAG_11 = 0.5        # Maximum lag for cross-correlation (s)
+FREQ_MIN_CC = 2.0           # Bandpass filter min frequency (Hz)
+FREQ_MAX_CC = 15.0          # Bandpass filter max frequency (Hz)
+CC_NETWORK = "3A"           # Network code for waveform loading in script 11
+
+# --- Script 12 Parameters ---
+# Threshold map for analysing multiple runs across different P/S thresholds
+THRESHOLDS_MAP_12 = {
+    "01-01": 0.1, "02-02": 0.2, "03-03": 0.3,
+    "04-04": 0.4, "05-05": 0.5, "06-06": 0.6,
+    "07-07": 0.7, "08-08": 0.8, "09-09": 0.9,
+}
+
 
 # =====================================================================
-# 2. SYSTEM VARIABLES (Automatically derived)
+# 2. SYSTEM VARIABLES (Automatically derived — do not edit)
 # =====================================================================
 
-# === Time Interval (Derived) ===
+# --- Time Interval (Derived) ---
 # Days corresponding to the interval
 start_day = starttime.julday
 end_day = endtime.julday
 
-# === Directory Paths ===
+# --- Threshold String (Derived) ---
+# Used to name output files of scripts 08-12.
+THR = f"{int(P_THRESHOLD*10):02d}-{int(S_THRESHOLD*10):02d}"
+
+# --- Directory Paths ---
 base_dir = os.getcwd()
 if PERSONAL_FOLDER:
     project_root = PERSONAL_FOLDER
@@ -161,7 +193,7 @@ inventory_dir = os.path.join(project_root, "inventory")
 download_log_path = os.path.join(project_root, "download_log.txt")  # used by script 01
 station_file_name = "stations.csv"  # station file name (used by script 06)
 
-# === FDSN Clients ===
+# --- FDSN Clients ---
 def get_fdsn_clients():
     """Returns a list of FDSN clients. 
     Initialized on demand to avoid connection errors during imports."""
@@ -188,7 +220,29 @@ h71_filtered_dir = os.path.join(output_dir, "filtered_data")
 # Additional path needed for some scripts
 case_study_dir = project_root
 
-# === Device Configuration ===
+# --- PHASE 2: DD directory and derived paths (scripts 08-12) ---
+# The DD folder stores the location-1D.out file from Hypoellipse and all derived files
+dd_dir = os.path.join(project_root, "DD")
+
+# Script 08: Input/Output
+location_1d_out_path = os.path.join(dd_dir, "location-1D.out")
+location_1d_quality_path = os.path.join(dd_dir, f"location-1D_{THR}.quality")
+
+# Script 10: hypoDD input file generation
+phs_file_path = os.path.join(h71_filtered_dir, "out_conv.phs")
+stations_csv_path = os.path.join(project_root, station_file_name)
+dd_output_file = os.path.join(dd_dir, f"travel_{THR}.dat")
+dd_station_file = os.path.join(dd_dir, f"station_{THR}.dat")
+
+# Script 11: Cross-correlation DD
+dd_dtcc_file = os.path.join(dd_dir, "dt.cc")
+
+# Script 12: Threshold analysis outputs
+CSV_FILENAME_12 = f"seismic_catalog_with_latlon_{year}_{start_day:03d}_{end_day:03d}.csv"
+output_bar_path_12 = os.path.join(output_base, "grouped_bar_charts.pdf")
+output_line_path_12 = os.path.join(output_base, "line_charts_vs_THR.pdf")
+
+# --- Device Configuration ---
 # --- CONFIGURAZIONE DEVICE (GPU/MPS/CPU) ---
 if torch.backends.mps.is_available():
     device = torch.device("mps")
