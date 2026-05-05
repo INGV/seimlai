@@ -3,27 +3,20 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 import re
+from config import (output_base, THRESHOLDS_MAP_12, CSV_FILENAME_12,
+                    output_bar_path_12, output_line_path_12)
 
-# --- 1. CONFIGURAZIONE PERCORSI ---
-BASE_DIR = '/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/output'
+# --- 1. CONFIGURAZIONE PERCORSI (from config.py) ---
+BASE_DIR = output_base
 
 # Mappatura cartelle -> Valore Threshold per i grafici
-THRESHOLDS_MAP = {
-    "01-01": 0.1,
-    "02-02": 0.2,
-    "03-03": 0.3,
-    "04-04": 0.4,
-    "05-05": 0.5,
-    "06-06": 0.6,
-    "07-07": 0.7,
-    "08-08": 0.8,
-    "09-09": 0.9
-}
+THRESHOLDS_MAP = THRESHOLDS_MAP_12
 
-CSV_FILENAME = 'seismic_catalog_with_latlon_2016_294_306.csv'
+CSV_FILENAME = CSV_FILENAME_12
 DPI = 300
-output_bar_path = os.path.join(BASE_DIR, 'grouped_bar_charts.pdf')
-output_line_path = os.path.join(BASE_DIR, 'line_charts_vs_THR.pdf')
+output_bar_path = output_bar_path_12
+output_line_path = output_line_path_12
+
 
 # --- 2. FUNZIONE DI PARSING (LOG + CSV) ---
 def parse_folder_data(folder_suffix, thr_value):
@@ -78,11 +71,18 @@ for folder_suffix, thr_value in THRESHOLDS_MAP.items():
     if row:
         results.append(row)
 
-df = pd.DataFrame(results).sort_values('THR')
+df = pd.DataFrame(results)
 
 if df.empty:
-    print("Errore: Nessun dato trovato!")
+    print("\n⚠️  Nessun dato trovato!")
+    print("    Questo script confronta i risultati di più run con threshold diversi.")
+    print("    Per ogni threshold (es. 01-01, 02-02, ...) deve esistere la cartella:")
+    print(f"      {BASE_DIR}/output_catalog_XX-XX/")
+    print("    contenente il file 'analisi_picking.log' (generato dallo script 04_2).")
+    print("\n    Se hai eseguito la pipeline una sola volta, questo script non ha dati da confrontare.")
     exit()
+
+df = df.sort_values('THR')
 
 # --- 4. FIGURA 1: ISTOGRAMMI RAGGRUPPATI ---
 print(f"Salvataggio istogrammi: {output_bar_path}")

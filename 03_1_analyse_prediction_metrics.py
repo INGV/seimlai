@@ -133,7 +133,7 @@ def analyze_data_by_threshold():
 
                 try:
                     df = pd.read_csv(file_path)
-                    df.columns = ['Julian_Day', 'Station', 'Datetime', 'Probability', 'Wave_Type']
+                    df.columns = ['Julian_Day', 'Station', 'Datetime', 'Probability', 'Amp', 'Wave_Type']
 
                     df_p = df[df['Wave_Type'] == 'p']['Probability']
                     df_s = df[df['Wave_Type'] == 's']['Probability']

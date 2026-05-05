@@ -12,24 +12,24 @@ import obspy
 from obspy.signal.cross_correlation import xcorr_pick_correction
 from obspy.geodetics import gps2dist_azimuth
 from tqdm import tqdm
+from config import (root_dir, dd_dir, dd_output_file, dd_dtcc_file,
+                    MAX_DIST_KM_CC, CC_THRESHOLD_11, WIN_BEFORE_CC,
+                    WIN_AFTER_CC, CC_MAX_LAG_11, FREQ_MIN_CC, FREQ_MAX_CC,
+                    CC_NETWORK)
 
-# --- CONFIGURAZIONE PERCORSI ---
-BASE_DIR = "/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog"
-EXP_DIR = os.path.join(BASE_DIR, "PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_/output/output_catalog_07-07/filtered_data")
-
-WAVEFORM_DIR = os.path.join(BASE_DIR, "waveforms")
-# Il file travel.dat creato dallo script 10
-FILE_TRAVEL = os.path.join(EXP_DIR, "travel_07-07.dat") 
-OUTPUT_DTCC = os.path.join(EXP_DIR, "dt.cc")
+# --- CONFIGURAZIONE PERCORSI (from config.py) ---
+WAVEFORM_DIR = root_dir
+FILE_TRAVEL = dd_output_file
+OUTPUT_DTCC = dd_dtcc_file
 
 # --- PARAMETRI ---
-MAX_DIST_KM = 3.0       # Distanza massima tra coppie
-CC_THRESHOLD = 0.7      # Soglia minima CC
-WIN_BEFORE = 0.2        # Finestra pre-pick
-WIN_AFTER = 0.8         # Finestra post-pick
-CC_MAX_LAG = 0.5        
-FREQ_MIN = 2.0
-FREQ_MAX = 15.0
+MAX_DIST_KM = MAX_DIST_KM_CC
+CC_THRESHOLD = CC_THRESHOLD_11
+WIN_BEFORE = WIN_BEFORE_CC
+WIN_AFTER = WIN_AFTER_CC
+CC_MAX_LAG = CC_MAX_LAG_11
+FREQ_MIN = FREQ_MIN_CC
+FREQ_MAX = FREQ_MAX_CC
 
 # --- FUNZIONI DI SUPPORTO ---
 
@@ -66,7 +66,7 @@ def parse_travel_dat(filepath):
                 })
     return catalog
 
-def get_waveform(sta, time, phase, network="3A"):
+def get_waveform(sta, time, phase, network=CC_NETWORK):
     """Carica waveform seguendo lo screenshot: YEAR/NET/STA/CHAN.D/NET.STA..CHAN.D.YEAR.JDAY"""
     year = str(time.year)
     jday = time.strftime("%j")
@@ -135,4 +135,4 @@ with open(OUTPUT_DTCC, "w") as f_out:
                             f_out.write(f"{sta:<5} {dt_cc:10.4f} {cc_val:7.4f} {phase}\n")
                     except: continue
 
-print(f"Fatto! File dt.cc generato in {EXP_DIR}")
+print(f"Fatto! File dt.cc generato in {dd_dir}")

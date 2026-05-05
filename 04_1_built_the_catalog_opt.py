@@ -64,11 +64,14 @@ if __name__ == "__main__":
     sorted_file = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
     # Estract nework and station name
-    #picks_df["Network"] = picks_df["Station"].str.split(".").str[0]  # Es. "IV.INTR." -> "IV"
-    picks_df["Station"] = picks_df["Station"].str.split(".").str[-2]  # Es. "IV.INTR." -> "INTR"
+    # Extract station name from dot-notation if present (e.g. "IV.INTR." -> "INTR")
+    # If names are already clean (e.g. "ED01"), leave them as-is
+    if picks_df["Station"].str.contains(r"\.").any():
+        #picks_df["Network"] = picks_df["Station"].str.split(".").str[0]
+        picks_df["Station"] = picks_df["Station"].str.split(".").str[-2]
     
     # Change network and station columns position
-    picks_df = picks_df[["Julian_Day", "Station", "Datetime", "Probability", "amp","Wave_Type"]]
+    picks_df = picks_df[["Julian_Day", "Station", "Datetime", "Probability", "Amp","Wave_Type"]]
     
     # Dataframe creation
     pick_df = []
@@ -78,7 +81,7 @@ if __name__ == "__main__":
             "timestamp": row["Datetime"], # Arrival time
             "amp": row["Amplitude"], # Log10 peak amplitude
             "prob": row["Probability"],  # PhaseNet probability
-            "amp": row["amp"],  #phase amplitude
+            "amp": row["Amp"],  #phase amplitude
             "type": row["Wave_Type"].lower() # waves type (p or s)
         })
     pick_df = pd.DataFrame(pick_df)
@@ -100,8 +103,20 @@ if __name__ == "__main__":
     #RUN GaMMA ASSOCIATOR
     os.environ["PYTHONWARNINGS"] = "ignore"
     warnings.filterwarnings("ignore")
+    
+    # Ensure both id columns are strings to prevent merge errors in GaMMA
+    pick_df["id"] = pick_df["id"].astype(str)
+    station_df["id"] = station_df["id"].astype(str)
+    
     catalogs, assignments = association(pick_df, station_df, config, method=config["method"])
     catalog = pd.DataFrame(catalogs)
+    if catalog.empty:
+        print("ERROR: GaMMA association returned 0 events!")
+        print(f"  Input picks: {len(pick_df)}")
+        matched = pick_df["id"].isin(station_df["id"]).sum()
+        print(f"  Picks matching a station: {matched}/{len(pick_df)}")
+        print("  Check that pick station IDs match station_df IDs.")
+        raise SystemExit(1)
     assignments = pd.DataFrame(assignments, columns=["pick_idx", "event_idx", "prob_gamma"])
     
     # SAVE Raw CATALOG with km coordinates

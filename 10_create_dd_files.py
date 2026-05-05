@@ -11,30 +11,23 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+from config import (THR, location_1d_quality_path, location_1d_out_path,
+                    phs_file_path, stations_csv_path, dd_output_file,
+                    dd_station_file, DD_MAX_GAP, DD_MAX_RMS, DD_MAX_ERH, DD_MAX_ERZ)
 
-# --- 1. Configuration (Mantieni i tuoi percorsi) ---
-THR='01-01'
-BASE_DIR= '/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/PRETRAINED_ORIGINAL'
-FILE_LOC = f'{BASE_DIR}/location-1D_{THR}.quality'
-FILE_OUT = f'{BASE_DIR}/location-1D_{THR}.out' 
-FILE_PHS=f"{BASE_DIR}/output/output_catalog/filtered_data/out_conv.phs"
-#FILE_PHS=f"{BASE_DIR}/output_03P_02S_PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_/output_catalog/filtered_data/out_conv.phs"
-#FILE_PHS = f'{BASE_DIR}/output/output_catalog_{THR}/filtered_data/out_conv.phs'
-STATIONS_FILE = '/Users/rossella.fonzetti/WORK/EPOS/TRAINING_AQ2009/GFZ_TESTS/Amatrice_catalog/stations.csv'
-
-
-# Estrae il percorso della directory da FILE_PHS
-PHS_DIR = os.path.dirname(FILE_PHS)
-OUTPUT_FILENAME = f"travel_{THR}.dat"
-# Unisce il percorso della directory con il nome del file di output
-OUTPUT_FILE = os.path.join(PHS_DIR, OUTPUT_FILENAME)
-STATION_FILE = os.path.join(PHS_DIR, f"station_{THR}.dat")
+# --- 1. Configuration (from config.py) ---
+FILE_LOC = location_1d_quality_path
+FILE_OUT = location_1d_out_path
+FILE_PHS = phs_file_path
+STATIONS_FILE = stations_csv_path
+OUTPUT_FILE = dd_output_file
+STATION_FILE = dd_station_file
 
 # Filtering criteria
-MAX_GAP = 180.0
-MAX_RMS = 0.4    # RMS_HYPO < 0.6
-MAX_ERH = 0.8 #1.5
-MAX_ERZ = 0.8
+MAX_GAP = DD_MAX_GAP
+MAX_RMS = DD_MAX_RMS
+MAX_ERH = DD_MAX_ERH
+MAX_ERZ = DD_MAX_ERZ
 
 # Mappatura dei pesi richiesta per l'output di hypoDD
 WEIGHT_MAP = {
@@ -98,34 +91,67 @@ def read_data_file(filepath, skiprows, names_count):
         sys.exit(1)
 
 
-def generate_sequential_ids():
+def generate_valid_event_ids():
     """
-    Generates a sequential ID (1, 2, 3, ...) by counting the exact event delimiter 
-    'earthquake location' in the location-1D.out file.
+    Generates the original OUT event IDs that correspond to VALID events
+    actually written in the location quality workflow.
+
+    Important:
+    FILE_OUT may contain extra 'earthquake location' blocks that are failed
+    attempts (for example blocks with NaN / IEEE_INVALID_FLAG and no
+    'date origin ...' summary). Those blocks are counted by a naive grep but
+    do NOT correspond to rows in FILE_LOC. If we assign IDs by counting every
+    'earthquake location', the IDs drift after the first failed block.
+
+    This function counts every 'earthquake location' as an original OUT event
+    number, but only keeps the ones that also contain a 'date origin ...'
+    header before the next earthquake block.
     """
-    print(f"3. Generating sequential IDs from {FILE_OUT}...")
-    
-    ids = []
-    current_id = 0
-    
+    print(f"3. Generating valid event IDs from {FILE_OUT}...")
+
+    valid_ids = []
+    current_out_event_id = 0
+
     if not os.path.exists(FILE_OUT):
         print(f"ERROR: OUT file not found: {FILE_OUT}")
         sys.exit(1)
 
     try:
         with open(FILE_OUT, 'r') as f:
-            for line in f:
-                # Usa la stringa esatta identificata: "earthquake location"
-                if "earthquake location" in line:
-                    current_id += 1
-                    ids.append(current_id)
-                        
+            lines = f.readlines()
     except IOError as e:
         print(f"ERROR reading {FILE_OUT}: {e}")
         sys.exit(1)
 
-    print(f"   Generated {len(ids)} sequential IDs.")
-    return ids
+    i = 0
+    n_lines = len(lines)
+
+    while i < n_lines:
+        line = lines[i]
+
+        if "earthquake location" in line:
+            current_out_event_id += 1
+            found_date_origin = False
+
+            j = i + 1
+            while j < n_lines:
+                if "earthquake location" in lines[j]:
+                    break
+
+                low = lines[j].lower()
+                if ("date" in low and "origin" in low and
+                        "lat" in low and "long" in low):
+                    found_date_origin = True
+                    break
+                j += 1
+
+            if found_date_origin:
+                valid_ids.append(current_out_event_id)
+
+        i += 1
+
+    print(f"   Found {len(valid_ids)} valid OUT event IDs.")
+    return valid_ids
 
 
 # --- 3. Read phs file anche match the ID---
@@ -154,7 +180,7 @@ def read_and_filter_data():
     ].copy()
 
     # --- Generazione e Assegnazione ID ---
-    all_original_ids = generate_sequential_ids()
+    all_original_ids = generate_valid_event_ids()
     len_loc = len(df_loc)
     len_ids = len(all_original_ids)
     min_len = min(len_loc, len_ids)
@@ -315,6 +341,11 @@ def read_and_filter_data():
     ).drop(columns=['PHS_ID', 'PHS_ID_Match']).copy()
     
     print(f"   Total phases matched to final events: {len(df_phs_final)}")
+    sample_debug_ids = [1594, 1595, 1596, 2965, 2966, 2967]
+    sample_matches = df_loc_final[df_loc_final['ID'].isin(sample_debug_ids)][['T', 'ID']].copy()
+    if not sample_matches.empty:
+        print("   DEBUG sample mapped event IDs from quality:")
+        print(sample_matches.to_string(index=False))
     print("-" * 40)
     
     
