@@ -48,17 +48,15 @@ stations_list = "*"
 fdsn_clients = ["IRIS"]
 
 # --- Model Configuration (script 02) ---
+# Select the neural network architecture. Options: 'PhaseNet' or 'EQTransformer' (Case insensitive)
+NEURAL_NETWORK = 'PhaseNet'
+
 # Pretrained model to use from SeisBench. Options: 'original', 'stead', 'instance', 'geofon', 'scedc'
 # Set to None if you want to load a custom model from CUSTOM_MODEL_PATH.
 MODEL_TYPE = 'original'
 # Path to a custom fine-tuned model weights file (.pth).
 # Set to None to use the pretrained model specified by MODEL_TYPE.
 CUSTOM_MODEL_PATH = None
-#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_4096_bs_0.0001_lr_std_norm.AQ2009_transferlearning_focalloss_20250627_143520_/model_weights_60.pth"
-#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_focalloss_20250630_235651_/model_weights_25.pth"
-#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_transferlearning_crossentropy_20250627_143934_/model_weights_60.pth"
-#CUSTOM_MODEL_PATH = "/net/storage/pr3/plgrid/plggepossraai/OLD_RUN/PN_60_epochs_1024_bs_0.0005_lr_std_norm.AQ2009_crossentropy_20250627_145201_/model_weights_41.pth"  # e.g. "/path/to/your/model.pth"
-
 # --- Picking Parameters (script 02) ---
 BATCH_SIZE = 256 #use 2048 for HPC cluster
 P_THRESHOLD = 0.1
@@ -222,7 +220,7 @@ case_study_dir = project_root
 
 # --- PHASE 2: DD directory and derived paths (scripts 08-12) ---
 # The DD folder stores the location-1D.out file from Hypoellipse and all derived files
-dd_dir = os.path.join(project_root, "DD")
+dd_dir = os.path.join(output_dir, "DD")
 
 # Script 08: Input/Output
 location_1d_out_path = os.path.join(dd_dir, "location-1D.out")
@@ -255,11 +253,18 @@ else:
     device_name = "CPU"
 
 # --- CARICAMENTO MODELLO ---
-# Loads a custom fine-tuned PhaseNet model from a local .pth file if CUSTOM_MODEL_PATH is set,
+# Loads a custom fine-tuned PhaseNet/EQTransformer model from a local .pth file if CUSTOM_MODEL_PATH is set,
 # otherwise loads the pretrained model specified by MODEL_TYPE from SeisBench.
+
+network_choice = NEURAL_NETWORK.lower()
+
 if CUSTOM_MODEL_PATH is not None:
-    model = PhaseNet()
-    model.labels = "PSN"
+    if network_choice == 'eqtransformer':
+        model = EQTransformer()
+    else:
+        model = PhaseNet()
+        model.labels = "PSN"
+        
     import torch as _torch
     
     # Carica il file .pth
@@ -285,8 +290,11 @@ if CUSTOM_MODEL_PATH is not None:
         
     print(f"Custom model loaded from: {CUSTOM_MODEL_PATH}")
 else:
-    model = EQTransformer.from_pretrained(MODEL_TYPE)
-    #model = PhaseNet.from_pretrained(MODEL_TYPE)
-    print(f"Pretrained model loaded: PhaseNet '{MODEL_TYPE}'")
+    if network_choice == 'eqtransformer':
+        model = EQTransformer.from_pretrained(MODEL_TYPE)
+        print(f"Pretrained model loaded: EQTransformer '{MODEL_TYPE}'")
+    else:
+        model = PhaseNet.from_pretrained(MODEL_TYPE)
+        print(f"Pretrained model loaded: PhaseNet '{MODEL_TYPE}'")
 model.to(device)
 model.eval()
