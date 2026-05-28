@@ -317,3 +317,224 @@ if __name__ == '__main__':
     log_file.write("="*60 + "\n")
     log_file.write(f"Total picking time: {total_duration:.2f} seconds\n")
     log_file.close()
+
+
+def sort_seismic_picking(df, output_file):
+    # Rename columns
+    df = df.rename(columns={
+        "station": "Station",
+        "timestamp": "Datetime",
+        "prob": "Probability",
+        "type": "Wave_Type",
+        "amp": "Amp"
+    })
+
+    # Convert Datatime column
+    df["Datetime"] = pd.to_datetime(df["Datetime"])
+
+    # Giulian Name computation (1-366)
+    df["Julian_Day"] = df["Datetime"].dt.dayofyear
+
+    # Rename Columns
+    column_order = ["Julian_Day", "Station", "Datetime", "Probability", "Amp", "Wave_Type"]
+    df = df[column_order]
+
+    # Sort picks
+    df_sorted = df.sort_values(by="Datetime")
+
+    # Save sorted picks into a new csv file
+    df_sorted.to_csv(output_file, index=False)
+
+    print(f"File ordinato salvato come: {output_file}")
+
+
+def run_sort_picks():
+    from config import output_picks_dir, start_day, end_day, year
+
+    all_dfs = []
+
+    for day in range(start_day, end_day + 1):
+        inputfile = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
+        if os.path.exists(inputfile):
+            print(f"Reading file: {inputfile}")
+            df = pd.read_csv(inputfile)
+            all_dfs.append(df)
+        else:
+            print(f"Warning: File not found for day {day}: {inputfile}")
+
+    if all_dfs:
+        # Concatenate all dataframes
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        
+        # Define output file
+        outputfile = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
+        
+        # Run sorting and saving
+        sort_seismic_picking(combined_df, outputfile)
+    else:
+        print("No pick files found to process.")
+
+
+def generate_combined_plots(df_plot, output_dir):
+    """Generates a single PDF file containing 5 combined subplots from the aggregated data."""
+    import matplotlib.pyplot as plt
+
+    SINGLE_PDF_FILE = "combined_analysis_report.pdf"
+    
+    thresholds = df_plot['threshold'].astype(str)
+    x = np.arange(len(thresholds))
+    width = 0.6 
+
+    fig = plt.figure(figsize=(16, 18))
+    gs = fig.add_gridspec(3, 2, hspace=0.6, wspace=0.3) 
+    
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax5 = fig.add_subplot(gs[2, :])
+
+    rects1 = ax1.bar(x, df_plot['num_p'], width, color='skyblue')
+    ax1.set_ylabel('P-wave Count')
+    ax1.set_title('1. P-wave Pick Count vs. Threshold')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(thresholds)
+    for rect in rects1:
+        height = rect.get_height()
+        ax1.text(rect.get_x() + rect.get_width()/2., height, f'{height:.0f}', ha='center', va='bottom', fontsize=8)
+
+    rects2 = ax2.bar(x, df_plot['num_s'], width, color='salmon')
+    ax2.set_ylabel('S-wave Count')
+    ax2.set_title('2. S-wave Pick Count vs. Threshold')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(thresholds)
+    for rect in rects2:
+        height = rect.get_height()
+        ax2.text(rect.get_x() + rect.get_width()/2., height, f'{height:.0f}', ha='center', va='bottom', fontsize=8)
+
+    rects3 = ax3.bar(x, df_plot['mean_p'], width, color='lightgreen')
+    ax3.set_ylabel('Mean Probability')
+    ax3.set_title('3. Mean P-wave Probability vs. Threshold (Mean +/- Std Dev)')
+    ax3.set_xticks(x)
+    ax3.set_xticklabels(thresholds)
+    for rect, m_p, sd_p in zip(rects3, df_plot['mean_p'], df_plot['std_p']):
+        text_label = f'{m_p:.4f} +/- {sd_p:.4f}'
+        ax3.text(rect.get_x() + rect.get_width()/2., rect.get_height(), text_label, ha='center', va='bottom', fontsize=8)
+
+    rects4 = ax4.bar(x, df_plot['mean_s'], width, color='gold')
+    ax4.set_ylabel('Mean Probability')
+    ax4.set_title('4. Mean S-wave Probability vs. Threshold (Mean +/- Std Dev)')
+    ax4.set_xticks(x)
+    ax4.set_xticklabels(thresholds)
+    for rect, m_s, sd_s in zip(rects4, df_plot['mean_s'], df_plot['std_s']):
+        text_label = f'{m_s:.4f} +/- {sd_s:.4f}'
+        ax4.text(rect.get_x() + rect.get_width()/2., rect.get_height(), text_label, ha='center', va='bottom', fontsize=8)
+
+    ax5.plot(thresholds, df_plot['std_p'], marker='o', linestyle='-', color='blue', label='P-wave Std Dev')
+    ax5.plot(thresholds, df_plot['std_s'], marker='s', linestyle='--', color='red', label='S-wave Std Dev')
+    ax5.set_ylabel('Standard Deviation of Probability')
+    ax5.set_xlabel('Threshold')
+    ax5.set_title('5. Probability Standard Deviation vs. Threshold (Combined Line Chart)')
+    ax5.legend()
+    ax5.grid(True, linestyle=':', alpha=0.6)
+
+    for ax in [ax1, ax2, ax3, ax4, ax5]:
+        ax.set_xlabel('Threshold')
+        ax.tick_params(axis='x', rotation=45)
+
+    output_path = os.path.join(output_dir, SINGLE_PDF_FILE)
+    fig.tight_layout() 
+    fig.savefig(output_path, format='pdf', dpi=300)
+    plt.close(fig)
+
+
+def analyze_data_by_threshold():
+    from config import output_base, start_day, end_day, year
+
+    BASE_DIRECTORY = output_base
+    FILE_NAME = f"{start_day}_{end_day}_{year}_picks_sort.csv"
+    LOG_FILE = "analysis_log.txt"
+    SINGLE_PDF_FILE = "combined_analysis_report.pdf"
+    
+    if not os.path.exists(BASE_DIRECTORY):
+        print(f"ERROR: The defined BASE_DIRECTORY '{BASE_DIRECTORY}' does not exist.")
+        return
+
+    log_path = os.path.join(BASE_DIRECTORY, LOG_FILE)
+    plot_data = []
+    found_any_data = False
+
+    for root, dirs, files in os.walk(BASE_DIRECTORY):
+        if os.path.basename(root).startswith('output_picks'):
+            dir_name = os.path.basename(root)
+            match = re.search(r'(\d+\.?\d+)', dir_name) 
+            threshold_value = match.group(1) if match else dir_name
+            
+            if FILE_NAME in files:
+                file_path = os.path.join(root, FILE_NAME)
+                found_any_data = True
+                
+                print(f"Aggregating data from: {dir_name} (Threshold: {threshold_value})")
+
+                try:
+                    df = pd.read_csv(file_path)
+                    df.columns = ['Julian_Day', 'Station', 'Datetime', 'Probability', 'Amp', 'Wave_Type']
+
+                    df_p = df[df['Wave_Type'] == 'p']['Probability']
+                    df_s = df[df['Wave_Type'] == 's']['Probability']
+
+                    num_p = len(df_p)
+                    num_s = len(df_s)
+                    
+                    mean_p = df_p.mean() if num_p > 0 else 0.0
+                    std_p = df_p.std() if num_p > 1 else 0.0 
+                    mean_s = df_s.mean() if num_s > 0 else 0.0
+                    std_s = df_s.std() if num_s > 1 else 0.0
+                    
+                    std_p = 0.0 if np.isnan(std_p) else std_p
+                    std_s = 0.0 if np.isnan(std_s) else std_s
+
+                    plot_data.append({
+                        'threshold': threshold_value,
+                        'num_p': num_p,
+                        'num_s': num_s,
+                        'mean_p': mean_p,
+                        'std_p': std_p,
+                        'mean_s': mean_s,
+                        'std_s': std_s,
+                    })
+
+                except Exception as e:
+                    print(f"ERROR: Could not process file in {root}. Details: {e}")
+                
+    if not found_any_data:
+        print("\n--- NO DATA FOUND ---")
+        print(f"Could not find '{FILE_NAME}' in any subdirectory starting with 'output_picks_' under '{BASE_DIRECTORY}'.")
+        return
+
+    df_plot = pd.DataFrame(plot_data)
+    df_plot['threshold_num'] = pd.to_numeric(df_plot['threshold'], errors='coerce') 
+    df_plot = df_plot.sort_values(by='threshold_num', na_position='last')
+    
+    with open(log_path, 'w') as log_file:
+        log_file.write("=== Probability Analysis by Threshold ===\n\n")
+        log_file.write(
+            "Threshold\tCount P\tCount S\tMean Prob P\tStd Dev Prob P\tMean Prob S\tStd Dev Prob S\n"
+            "------------------------------------------------------------------------------------------------------\n"
+        )
+        for index, row in df_plot.iterrows():
+            log_entry = (
+                f"{row['threshold']}\t{row['num_p']}\t{row['num_s']}\t{row['mean_p']:.4f}\t{row['std_p']:.4f}\t{row['mean_s']:.4f}\t{row['std_s']:.4f}\n"
+            )
+            log_file.write(log_entry)
+        
+    generate_combined_plots(df_plot, BASE_DIRECTORY)
+    
+    print(f"\nAnalysis complete!")
+    print(f"Single log file saved (SORTED) to: {log_path}")
+    print(f"Single combined PDF saved to: {os.path.join(BASE_DIRECTORY, SINGLE_PDF_FILE)}")
+
+
+if __name__ == '__main__':
+    run_sort_picks()
+    analyze_data_by_threshold()

@@ -334,3 +334,71 @@ def convert_h71_ids(input_path):
     print(f"File H71 update saved in: {output_path}")
 
 convert_h71_ids(os.path.join(h71_filtered_dir, "out.h71"))
+
+
+def dec_to_degmin(dec_deg, is_lat=True):
+    """
+    Convert decimal degrees to degrees + minutes format.
+    Example: 42.8295 -> '42N49.77'
+    """
+    degrees = int(dec_deg)
+    minutes = abs(dec_deg - degrees) * 60
+    direction = ('N' if dec_deg >= 0 else 'S') if is_lat else ('E' if dec_deg >= 0 else 'W')
+    return f"{abs(degrees):02d}{direction}{minutes:05.2f}"
+
+
+def convert_station_file_for_hypoellipse():
+    df = pd.read_csv(os.path.join(case_study_dir, station_file_name))
+
+    os.makedirs(h71_filtered_dir, exist_ok=True)
+
+    lines = []
+
+    for _, row in df.iterrows():
+        code_full = str(row["station"])
+        code_len = len(code_full)
+        code = code_full[:5]
+
+        lat = dec_to_degmin(row["latitude"], is_lat=True)
+        lon = dec_to_degmin(row["longitude"], is_lat=False)
+        elev = int(round(row["elevation"]))
+        depth = 0
+        weight = 1.00
+
+        elev_str = f"{elev:>5}"
+
+        if code_len == 3:
+            line1 = f" {code}{lat}  {lon}{elev_str}"
+        elif code_len == 4:
+            line1 = f"{code:<4}{lat}  {lon}{elev_str}"
+        elif code_len >= 5:
+            base_line1 = f"{code[:4]:<4}{lat}  {lon}{elev_str}"
+            padding = " " * max(0, 79 - len(base_line1))
+            line1 = base_line1 + padding + code[4]
+        else:
+            line1 = f"{code[:4]:<4}{lat}  {lon}{elev_str}"
+
+        if code_len == 3:
+            line2 = f" {code}*{depth:6d}{weight:10.2f}"
+        elif code_len == 4:
+            line2 = f"{code[:4]:<4}*{depth:6d}{weight:10.2f}"
+        elif code_len >= 5:
+            base_line2 = f"{code[:4]:<4}*{depth:6d}{weight:10.2f}"
+            padding2 = " " * max(0, 79 - len(base_line2))
+            line2 = base_line2 + padding2 + code[4]
+        else:
+            line2 = f"{code[:4]:<4}*{depth:6d}{weight:10.2f}"
+
+        lines.append(line1)
+        lines.append(line2)
+
+    output_path = os.path.join(h71_filtered_dir, "all.he")
+    with open(output_path, "w") as f:
+        for line in lines:
+            f.write(line + "\n")
+
+    os.makedirs(dd_dir, exist_ok=True)
+    print(f"Station file saved in: {output_path}")
+
+
+convert_station_file_for_hypoellipse()

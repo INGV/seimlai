@@ -1,42 +1,44 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Pipeline runner: executes scripts in order.
+Pipeline runner: executes workflow stages in order.
+
 Usage:
-    python run.py            # run scripts 01 to 06
-    python run.py continue   # run scripts 08 to 12 (requires location-1D.out)
-    python run.py --from 03  # start from a specific step (phase 1 only)
-    python run.py --only 04_1 04_2  # run only specific steps
+    python run.py
+    python run.py continue
+    python run.py --from 03
+    python run.py --only 04 05
+    python run.py gamma-analysis
+    python run.py plot-catalog
+    python run.py threshold-analysis
+    python run.py cc-dd-test
 """
 
+import argparse
 import subprocess
 import sys
 import time
-import argparse
-from config import *
 
-# ============================================================
-# PIPELINE DEFINITION
-# Each entry: (step_id, script_filename, description)
-# ============================================================
-PIPELINE_PHASE1 = [
-    ("01",    "01_download_parallel.py",                    "Download waveforms"),
-    ("02_1",  "02_1_apply_and_visualize_picks_priority.py", "Apply phase picking using NN"),
-    ("03",    "03_sort_picks.py",                          "Sort and consolidate picks"),
-    ("03_1",  "03_1_analyse_prediction_metrics.py",         "Analyse prediction metrics"),
-    ("04_1",  "04_1_built_the_catalog_opt.py",              "Run GaMMA association"),
-    ("04_2",  "04_2_analyze_GaMMAoutput.py",               "Analyse GaMMA output"),
-    ("04_3",  "04_3_plot_catalog.py",                      "Plot catalog (PyGMT)"),
-    ("05",    "05_create_phs_h71_new.py",                   "Create .phs and .h71 files"),
-    ("06",    "06_convert_stationfile.py",                  "Convert station file to .he"),
+
+MAIN_PIPELINE = [
+    ("01", "01_download_data.py", "Download data"),
+    ("02", "02_data_cleaning.py", "Data cleaning"),
+    ("03", "03_phase_picking_cnn.py", "Phase picking (CNN)"),
+    ("04", "04_phase_association_raw_catalog_building_gamma.py", "Phase association and raw catalog building (GaMMA)"),
+    ("05", "05_data_preparation_for_absolute_location.py", "Data preparation for absolute location"),
+    ("06", "06_absolute_location_hypoellipse.py", "Absolute location (HypoEllipse output check)"),
+    ("07", "07_locations_filtering.py", "Locations filtering"),
+    ("08", "08_relative_relocation_hypodd.py", "Relative relocation (HypoDD input generation)"),
 ]
 
-PIPELINE_PHASE2 = [
-    ("08", "08_create_location_quality_file_v2new.py", "Create location quality file"),
-    ("10", "10_create_dd_files.py",                     "Create hypoDD input files"),
-    ("11", "11_cc_DD_non_testato.py",                   "Cross-correlation DD (experimental)"),
-    ("12", "12_analyse_thr_results.py",                 "Analyse threshold results"),
-]
+CONTINUE_PIPELINE = MAIN_PIPELINE[5:]
+
+OPTIONAL_COMMANDS = {
+    "gamma-analysis": ("gamma-analysis.py", "Analyse GaMMA output"),
+    "plot-catalog": ("plot-catalog.py", "Plot catalog (PyGMT)"),
+    "threshold-analysis": ("12_analyse_thr_results.py", "Analyse threshold results"),
+    "cc-dd-test": ("11_cc_DD_non_testato.py", "Cross-correlation DD test"),
+}
 
 
 def run_step(step_id, script, description):
@@ -45,6 +47,7 @@ def run_step(step_id, script, description):
     print(f"  STEP {step_id:>5}  |  {description}")
     print(f"  Script: {script}")
     print(f"{'='*60}")
+    sys.stdout.flush()
     t0 = time.time()
     result = subprocess.run([sys.executable, script], capture_output=False)
     elapsed = time.time() - t0
@@ -58,106 +61,100 @@ def run_step(step_id, script, description):
 def parse_args():
     epilog = """
 COMMANDS:
-  (none)     Run Phase 1: scripts 01 to 06
-  continue   Run Phase 2: scripts 08 to 12 (requires location-1D.out from Hypoellipse)
+  (none)              Run the full workflow.
+  continue            Continue from the HypoEllipse output check (steps 06-08).
+  gamma-analysis      Run optional GaMMA output analysis.
+  plot-catalog        Run optional catalog plotting.
+  threshold-analysis  Run optional threshold analysis.
+  cc-dd-test          Run optional experimental cross-correlation DD test.
 
-STEP IDs (in pipeline order):
-  Phase 1:
-    01      Download waveforms
-    02_1    Apply phase picking using NN
-    03      Sort and consolidate picks
-    03_1    Analyse prediction metrics
-    04_1    Run GaMMA association
-    04_2    Analyse GaMMA output
-    04_3    Plot catalog (PyGMT)
-    05      Create .phs and .h71 files
-    06      Convert station file to .he
-  Phase 2 (continue):
-    08      Create location quality file
-    10      Create hypoDD input files
-    11      Cross-correlation DD (experimental)
-    12      Analyse threshold results
+STEP IDs:
+  01  Download data
+  02  Data cleaning
+  03  Phase picking (CNN)
+  04  Phase association and raw catalog building (GaMMA)
+  05  Data preparation for absolute location
+  06  Absolute location (HypoEllipse output check)
+  07  Locations filtering
+  08  Relative relocation (HypoDD input generation)
 
 EXAMPLES:
-  # Run Phase 1 (scripts 01-06):
   python run.py
-
-  # Run Phase 2 (scripts 08-12):
   python run.py continue
-
-  # Start Phase 1 from step 03 (skip download and picking):
   python run.py --from 03
-
-  # Start Phase 2 from step 11:
-  python run.py continue --from 11
-
-  # Run only specific steps:
-  python run.py --only 05 06
-
-  # Run only specific Phase 2 steps:
-  python run.py continue --only 11 12
+  python run.py --only 06 07
+  python run.py gamma-analysis
 """
     parser = argparse.ArgumentParser(
-        description="Seismic pipeline runner — executes scripts in order.",
+        description="Seismic workflow runner.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=epilog,
     )
     parser.add_argument(
-        "command", nargs="?", default=None,
-        choices=["continue"],
-        help="Use 'continue' to run Phase 2 (scripts 08-12). Omit for Phase 1 (01-06)."
+        "command",
+        nargs="?",
+        default=None,
+        choices=["continue", *OPTIONAL_COMMANDS.keys()],
+        help="Optional command to run instead of the full workflow."
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--from", dest="from_step", metavar="STEP_ID",
-        help="Start pipeline from this step ID (e.g. 03, 04_1)"
+        "--from",
+        dest="from_step",
+        metavar="STEP_ID",
+        help="Start pipeline from this step ID."
     )
     group.add_argument(
-        "--only", dest="only_steps", metavar="STEP_ID", nargs="+",
-        help="Run only these step IDs (e.g. --only 05 06)"
+        "--only",
+        dest="only_steps",
+        metavar="STEP_ID",
+        nargs="+",
+        help="Run only these step IDs."
     )
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
-
-    # Select which phase to run
-    if args.command == "continue":
-        pipeline = PIPELINE_PHASE2
-        phase_label = "Phase 2 (scripts 08-12)"
-    else:
-        pipeline = PIPELINE_PHASE1
-        phase_label = "Phase 1 (scripts 01-06)"
-
+def select_steps(pipeline, from_step=None, only_steps=None, phase_label="workflow"):
     steps_to_run = pipeline
 
-    if args.from_step:
+    if from_step:
         ids = [s[0] for s in pipeline]
-        if args.from_step not in ids:
-            print(f"[ERROR] Unknown step ID '{args.from_step}'. Valid IDs for {phase_label}: {ids}")
+        if from_step not in ids:
+            print(f"[ERROR] Unknown step ID '{from_step}'. Valid IDs for {phase_label}: {ids}")
             sys.exit(1)
-        idx = ids.index(args.from_step)
+        idx = ids.index(from_step)
         steps_to_run = pipeline[idx:]
 
-    elif args.only_steps:
+    elif only_steps:
         ids = [s[0] for s in pipeline]
-        for s in args.only_steps:
-            if s not in ids:
-                print(f"[ERROR] Unknown step ID '{s}'. Valid IDs for {phase_label}: {ids}")
+        for step_id in only_steps:
+            if step_id not in ids:
+                print(f"[ERROR] Unknown step ID '{step_id}'. Valid IDs for {phase_label}: {ids}")
                 sys.exit(1)
-        steps_to_run = [s for s in pipeline if s[0] in args.only_steps]
+        steps_to_run = [s for s in pipeline if s[0] in only_steps]
 
-    # Filter out step 01 if PERSONAL_FOLDER is set AND DOWNLOAD_DATA is False
-    if PERSONAL_FOLDER is not None and not DOWNLOAD_DATA:
-        steps_to_run = [s for s in steps_to_run if s[0] != "01"]
+    if any(step[0] == "01" for step in steps_to_run):
+        try:
+            from config import PERSONAL_FOLDER, DOWNLOAD_DATA
+        except ModuleNotFoundError:
+            PERSONAL_FOLDER = None
+            DOWNLOAD_DATA = True
+
+        if PERSONAL_FOLDER is not None and not DOWNLOAD_DATA:
+            steps_to_run = [s for s in steps_to_run if s[0] != "01"]
+
+    return steps_to_run
+
+
+def run_pipeline(pipeline, phase_label, from_step=None, only_steps=None):
+    steps_to_run = select_steps(pipeline, from_step, only_steps, phase_label)
 
     print(f"\n{'#'*60}")
-    print(f"  SEISMIC PIPELINE — {phase_label}")
+    print(f"  SEISMIC WORKFLOW - {phase_label}")
     print(f"  {len(steps_to_run)} step(s) to run")
     print(f"{'#'*60}")
-    for s in steps_to_run:
-        print(f"  [{s[0]:>5}] {s[2]}")
+    for step in steps_to_run:
+        print(f"  [{step[0]:>2}] {step[2]}")
 
     total_start = time.time()
     for step_id, script, description in steps_to_run:
@@ -168,6 +165,38 @@ def main():
     print(f"\n{'#'*60}")
     print(f"  ALL STEPS COMPLETED in {total_elapsed:.1f}s")
     print(f"{'#'*60}\n")
+
+
+def run_optional_command(command):
+    script, description = OPTIONAL_COMMANDS[command]
+    if not run_step(command, script, description):
+        sys.exit(1)
+
+
+def main():
+    args = parse_args()
+
+    if args.command in OPTIONAL_COMMANDS:
+        if args.from_step or args.only_steps:
+            print("[ERROR] --from and --only can only be used with the main workflow or continue.")
+            sys.exit(1)
+        run_optional_command(args.command)
+        return
+
+    if args.command == "continue":
+        run_pipeline(
+            CONTINUE_PIPELINE,
+            "continue (steps 06-08)",
+            from_step=args.from_step,
+            only_steps=args.only_steps,
+        )
+    else:
+        run_pipeline(
+            MAIN_PIPELINE,
+            "full workflow",
+            from_step=args.from_step,
+            only_steps=args.only_steps,
+        )
 
 
 if __name__ == "__main__":

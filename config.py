@@ -5,7 +5,7 @@ Configuration file for all scripts.
 Contains environment variables, paths, and parameters shared across the pipeline.
 
 Structure:
-  1. USER CONFIGURATION — All variables the user must set, ordered by script.
+  1. USER CONFIGURATION — All variables the user must set, ordered by workflow stage.
   2. SYSTEM VARIABLES   — Everything derived automatically (paths, device, model).
 """
 
@@ -17,37 +17,37 @@ from seisbench.models import PhaseNet, EQTransformer
 from pyproj import CRS, Transformer
 
 # =====================================================================
-# 1. USER CONFIGURATION (ordered by script)
+# 1. USER CONFIGURATION (ordered by workflow stage)
 # =====================================================================
 
 # --- General / Case Study ---
-case_study_name = "Amatrice_catalog"
+case_study_name = "Amatrice_catalog_test"
 # Set to a path (e.g. "/path/to/external/folder") to store all data and output there.
 # If None, the folder [case_study_name] will be created in the current directory.
 PERSONAL_FOLDER = None
-# Set to True to run the download script (01).
+# Set to True to run the download stage (01).
 # Set to False to skip it and use existing data if you have put yout own folder.
 DOWNLOAD_DATA = True 
 
-# --- Geographic Bounding Box (scripts 01, 04_1) ---
+# --- Geographic Bounding Box (download and GaMMA association stages) ---
 minlatitude = 42.25
 maxlatitude = 43.12
 minlongitude = 11.75
 maxlongitude = 14.00
 
-# --- Time Interval (scripts 01, 02, …) ---
-starttime = UTCDateTime("2016-10-26")
+# --- Time Interval (workflow stages 01, 03, ...) ---
+starttime = UTCDateTime("2016-10-31")
 endtime = UTCDateTime("2016-10-31")
 year = 2016
 
-# --- Station Parameters (script 01) ---
+# --- Station Parameters (download stage) ---
 network = "*"                # network code
 channel = "BH?,HH?,EH?"      # channel types
 stations_list = "*"
 # fdsn_clients = ["INGV", "IRIS"]
 fdsn_clients = ["IRIS"]
 
-# --- Model Configuration (script 02) ---
+# --- Model Configuration (phase picking stage) ---
 # Select the neural network architecture. Options: 'PhaseNet' or 'EQTransformer' (Case insensitive)
 NEURAL_NETWORK = 'PhaseNet'
 
@@ -57,17 +57,17 @@ MODEL_TYPE = 'original'
 # Path to a custom fine-tuned model weights file (.pth).
 # Set to None to use the pretrained model specified by MODEL_TYPE.
 CUSTOM_MODEL_PATH = None
-# --- Picking Parameters (script 02) ---
+# --- Picking Parameters (phase picking stage) ---
 BATCH_SIZE = 256 #use 2048 for HPC cluster
-P_THRESHOLD = 0.1
-S_THRESHOLD = 0.1
+P_THRESHOLD = 0.9
+S_THRESHOLD = 0.9
 
-# --- Plotting Parameters (script 02) ---
+# --- Plotting Parameters (phase picking stage) ---
 # LUNGHEZZA DELLA FINESTRA DI VISUALIZZAZIONE PER SUBPLOT (in secondi)
 WLENGTH_SECONDS = 900 # 30 min
 
 # =====================================================================
-# GAMMA CONFIGURATION (script 04_1)
+# GAMMA CONFIGURATION (phase association and raw catalog stage)
 # =====================================================================
 
 # Define coordinate systems 
@@ -119,10 +119,10 @@ config["max_sigma11"] = 1.5 # second
 config["max_sigma22"] = 1.0 # log10(m/s)
 config["max_sigma12"] = 1.0 # covariance
 
-# --- Script 04_2 Parameters ---
+# --- Optional gamma-analysis Parameters ---
 analysis_log_filename = "analisi_picking.log"
 
-# --- Script 04_3 Parameters (PyGMT) ---
+# --- Optional plot-catalog Parameters (PyGMT) ---
 # Define the path to your GMT library if it's not in the default system path.
 GMT_LIBRARY_PATH = os.environ.get("GMT_LIBRARY_PATH", "")
 # Path to local topography grid file or a PyGMT remote dataset (e.g., "@earth_relief_15s")
@@ -132,13 +132,13 @@ plot_region = [12.5, 14.00, 42.00, 43.50]
 # Map title
 plot_map_title = "Central Italy - Seismicity"
 
-# --- Script 05 Parameters ---
+# --- Data Preparation for Absolute Location Parameters ---
 # Minimum number of P picks per event for Hypoellipse filtering
 h71_min_p = 4
 # Minimum number of S picks per event for Hypoellipse filtering
 h71_min_s = 2
 
-# --- Script 10 Parameters ---
+# --- Locations filtering / relative relocation Parameters ---
 # Filtering criteria for hypoDD file generation
 DD_MAX_GAP = 180.0
 DD_MAX_RMS = 0.4
@@ -174,7 +174,7 @@ start_day = starttime.julday
 end_day = endtime.julday
 
 # --- Threshold String (Derived) ---
-# Used to name output files of scripts 08-12.
+# Used to name DD-stage output files.
 THR = f"{int(P_THRESHOLD*10):02d}-{int(S_THRESHOLD*10):02d}"
 
 # --- Directory Paths ---
@@ -188,8 +188,8 @@ else:
 os.makedirs(project_root, exist_ok=True)
 
 inventory_dir = os.path.join(project_root, "inventory")
-download_log_path = os.path.join(project_root, "download_log.txt")  # used by script 01
-station_file_name = "stations.csv"  # station file name (used by script 06)
+download_log_path = os.path.join(project_root, "download_log.txt")  # used by the download stage
+station_file_name = "stations.csv"  # station file name
 
 # --- FDSN Clients ---
 def get_fdsn_clients():
@@ -206,27 +206,30 @@ def get_fdsn_clients():
 # --- SETUP DIRECTORIES CONTAINING THE OUTPUTS OF THE SCRIPTS ---
 root_dir = os.path.join(project_root, "waveforms")  
 inventory_dir = os.path.join(project_root, "inventory")
-waveform_base = os.path.join(root_dir, str(year))  # where script 02+ reads from
+waveform_base = os.path.join(root_dir, str(year))  # where phase picking reads from
 output_base = os.path.join(project_root, "output")
 output_picks_dir = os.path.join(output_base, f"output_picks_{P_THRESHOLD}")
 #plot_dir = os.path.join(output_base, f"plots_annotations_{P_THRESHOLD}", f"{year}_{start_day:03d}_{end_day:03d}")
-log_file_path = os.path.join(output_base, "phase_picking_log.txt")  # used by scripts 02+
-# Used by script 04_1 for the output
+log_file_path = os.path.join(output_base, "phase_picking_log.txt")  # used by phase picking
+# Used by the GaMMA association stage for the output
 output_dir = os.path.join(output_base, f"output_catalog_{P_THRESHOLD}")
-# Used by script 05 and script 06 for the filtered Hypoellipse output
+# Used by the absolute-location preparation stage for the filtered Hypoellipse input
 h71_filtered_dir = os.path.join(output_dir, "filtered_data")
-# Additional path needed for some scripts
+# Additional path needed for workflow stages
 case_study_dir = project_root
 
-# --- PHASE 2: DD directory and derived paths (scripts 08-12) ---
+# --- DD directory and derived paths ---
 # The DD folder stores the location-1D.out file from Hypoellipse and all derived files
 dd_dir = os.path.join(output_dir, "DD")
+os.makedirs(dd_dir, exist_ok=True)
 
-# Script 08: Input/Output
+# Location filtering: Input/Output
 location_1d_out_path = os.path.join(dd_dir, "location-1D.out")
 location_1d_quality_path = os.path.join(dd_dir, f"location-1D_{THR}.quality")
+filtered_locations_csv_path = os.path.join(dd_dir, f"filtered_locations_{THR}.csv")
+filtered_phases_csv_path = os.path.join(dd_dir, f"filtered_phases_{THR}.csv")
 
-# Script 10: hypoDD input file generation
+# Relative relocation: hypoDD input file generation
 phs_file_path = os.path.join(h71_filtered_dir, "out_conv.phs")
 stations_csv_path = os.path.join(project_root, station_file_name)
 dd_output_file = os.path.join(dd_dir, f"travel_{THR}.dat")

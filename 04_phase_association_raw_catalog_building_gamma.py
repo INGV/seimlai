@@ -63,6 +63,8 @@ if __name__ == "__main__":
     # UPLOAD PICKS FILE
     sorted_file = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
+    if "Amp" not in picks_df.columns and "Amplitude" in picks_df.columns:
+        picks_df = picks_df.rename(columns={"Amplitude": "Amp"})
     # Estract nework and station name
     # Extract station name from dot-notation if present (e.g. "IV.INTR." -> "INTR")
     # If names are already clean (e.g. "ED01"), leave them as-is
@@ -79,7 +81,6 @@ if __name__ == "__main__":
         pick_df.append({
             "id": row['Station'], #Station Name
             "timestamp": row["Datetime"], # Arrival time
-            "amp": row["Amplitude"], # Log10 peak amplitude
             "prob": row["Probability"],  # PhaseNet probability
             "amp": row["Amp"],  #phase amplitude
             "type": row["Wave_Type"].lower() # waves type (p or s)
@@ -138,7 +139,7 @@ if __name__ == "__main__":
     if missing_events:
         print(f"Warning: {len(missing_events)} event_idx not match into the catalog!")
     picks_with_events.drop(columns=["event_index"], inplace=True, errors="ignore")
-    picks_with_events = picks_with_events[["id", "timestamp", "prob", "type", "event_idx", "prob_gamma"]]
+    picks_with_events = picks_with_events[["id", "timestamp", "prob", "amp", "type", "event_idx", "prob_gamma"]]
     # Save all picks (the id .-1 is referred to un-associated picks)
     output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
     picks_with_events.to_csv(output_gamma_picks, index=False)

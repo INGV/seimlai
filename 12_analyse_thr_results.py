@@ -78,7 +78,7 @@ if df.empty:
     print("    Questo script confronta i risultati di più run con threshold diversi.")
     print("    Per ogni threshold (es. 01-01, 02-02, ...) deve esistere la cartella:")
     print(f"      {BASE_DIR}/output_catalog_XX-XX/")
-    print("    contenente il file 'analisi_picking.log' (generato dallo script 04_2).")
+    print("    contenente il file 'analisi_picking.log' (generato dal comando gamma-analysis).")
     print("\n    Se hai eseguito la pipeline una sola volta, questo script non ha dati da confrontare.")
     exit()
 
