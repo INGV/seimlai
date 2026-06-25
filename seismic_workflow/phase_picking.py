@@ -17,6 +17,10 @@ import torch
 from obspy import read, Stream, UTCDateTime, read_inventory
 
 
+def _apply_context(ctx, *, include_device=False):
+    globals().update(ctx.legacy_globals(include_device=include_device))
+
+
 # =====================================================================
 # --- 1. FUNZIONI DI SUPPORTO ---
 # =====================================================================
@@ -51,12 +55,18 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
 def process_station_worker(args):
     # IMPORT LOCALE: Il worker carica dal config solo i parametri del modello.
     # Questo permette alla GPU di attivarsi in totale sicurezza per ogni processo.
-    from config import BATCH_SIZE, P_THRESHOLD, S_THRESHOLD, model
-    
+    from seismic_workflow.context import build_context
+
     # FRENO CPU: Evita l'ingorgo matematico tra i 16 worker attivi
     torch.set_num_threads(1)
-    
-    net, stat, day, stat_path, inv_path, year = args
+
+    net, stat, day, stat_path, inv_path, year, config_path = args
+    ctx = build_context(config_path)
+    worker_globals = ctx.legacy_globals(include_model=True)
+    BATCH_SIZE = worker_globals["BATCH_SIZE"]
+    P_THRESHOLD = worker_globals["P_THRESHOLD"]
+    S_THRESHOLD = worker_globals["S_THRESHOLD"]
+    model = worker_globals["model"]
     logs = []
     pick_df_list = []
     
@@ -229,15 +239,15 @@ def process_station_worker(args):
 # =====================================================================
 # --- 3. MAIN SCRIPT (Il "Direttore d'orchestra") ---
 # =====================================================================
-if __name__ == '__main__':
+def execute_phase_picking(ctx):
     # 1. OBBLIGATORIO: Prepariamo il multiprocessing PRIMA di attivare la GPU
     try:
         mp.set_start_method('spawn', force=True)
     except RuntimeError:
         pass
 
-    # 2. SOLO ORA importiamo le directory e i parametri generali dal config
-    from config import *
+    # 2. SOLO ORA importiamo le directory e i parametri generali dal context
+    _apply_context(ctx, include_device=True)
 
     os.makedirs(output_picks_dir, exist_ok=True)
 
@@ -262,7 +272,7 @@ if __name__ == '__main__':
     for day in range(start_day, end_day + 1):
         log_file.write(f"\n--- Processing day: {day} ---\n")
         print(f"\nProcessing day: {day}", flush=True)
-        
+    
         daily_csv = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
         if os.path.exists(daily_csv):
             os.remove(daily_csv)
@@ -279,23 +289,23 @@ if __name__ == '__main__':
             for stat in sorted(os.listdir(net_path)):
                 stat_path = os.path.join(net_path, stat)
                 if not os.path.isdir(stat_path): continue
-                
+            
                 inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
-                tasks.append((net, stat, day, stat_path, inv_path, year))
+                tasks.append((net, stat, day, stat_path, inv_path, year, str(ctx.config_path)))
 
         # Esecuzione in parallelo
         all_daily_picks = []
         with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
             futures = {executor.submit(process_station_worker, task): task for task in tasks}
-            
+        
             # Man mano che i worker finiscono, si raccolgono i risultati
             for future in as_completed(futures):
                 df_station, worker_logs = future.result()
-                
+            
                 # Salvataggio nel file log di tutto il lavoro della stazione
                 for msg in worker_logs:
                     log_file.write(msg + "\n")
-                
+            
                 if not df_station.empty:
                     all_daily_picks.append(df_station)
 
@@ -348,8 +358,8 @@ def sort_seismic_picking(df, output_file):
     print(f"File ordinato salvato come: {output_file}")
 
 
-def run_sort_picks():
-    from config import output_picks_dir, start_day, end_day, year
+def run_sort_picks(ctx):
+    _apply_context(ctx)
 
     all_dfs = []
 
@@ -448,8 +458,8 @@ def generate_combined_plots(df_plot, output_dir):
     plt.close(fig)
 
 
-def analyze_data_by_threshold():
-    from config import output_base, start_day, end_day, year
+def analyze_data_by_threshold(ctx):
+    _apply_context(ctx)
 
     BASE_DIRECTORY = output_base
     FILE_NAME = f"{start_day}_{end_day}_{year}_picks_sort.csv"
@@ -535,6 +545,20 @@ def analyze_data_by_threshold():
     print(f"Single combined PDF saved to: {os.path.join(BASE_DIRECTORY, SINGLE_PDF_FILE)}")
 
 
+def run(ctx):
+    execute_phase_picking(ctx)
+    run_sort_picks(ctx)
+    analyze_data_by_threshold(ctx)
+
+
+def main():
+    from seismic_workflow.context import build_context
+
+    run(build_context("config.yaml"))
+
+
+run_phase_picking = run
+
+
 if __name__ == '__main__':
-    run_sort_picks()
-    analyze_data_by_threshold()
+    main()

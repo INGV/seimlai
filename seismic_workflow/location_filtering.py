@@ -205,37 +205,21 @@ def main(in_file, out_file):
             )
     print(f"Wrote {len(events)} events to {out_file}")
 
-if __name__ == "__main__":
-    from config import location_1d_out_path, location_1d_quality_path
-
-    if len(sys.argv) >= 3:
-        in_file, out_file = sys.argv[1], sys.argv[2]
-    else:
-        in_file = location_1d_out_path
-        out_file = location_1d_quality_path
-
-    main(in_file, out_file)
-
-
 from datetime import datetime
 import os
 import pandas as pd
 import numpy as np
-from config import (location_1d_quality_path, location_1d_out_path,
-                    phs_file_path, filtered_locations_csv_path,
-                    filtered_phases_csv_path, DD_MAX_GAP, DD_MAX_RMS,
-                    DD_MAX_ERH, DD_MAX_ERZ)
 
-FILE_LOC = location_1d_quality_path
-FILE_OUT = location_1d_out_path
-FILE_PHS = phs_file_path
-FILTERED_LOCATIONS_FILE = filtered_locations_csv_path
-FILTERED_PHASES_FILE = filtered_phases_csv_path
+FILE_LOC = None
+FILE_OUT = None
+FILE_PHS = None
+FILTERED_LOCATIONS_FILE = None
+FILTERED_PHASES_FILE = None
 
-MAX_GAP = DD_MAX_GAP
-MAX_RMS = DD_MAX_RMS
-MAX_ERH = DD_MAX_ERH
-MAX_ERZ = DD_MAX_ERZ
+MAX_GAP = None
+MAX_RMS = None
+MAX_ERH = None
+MAX_ERZ = None
 
 WEIGHT_MAP = {
     0: 1.00,
@@ -243,6 +227,21 @@ WEIGHT_MAP = {
     2: 0.50,
     3: 0.25
 }
+
+
+def _apply_context(ctx):
+    globals().update(ctx.legacy_globals())
+    globals().update({
+        "FILE_LOC": location_1d_quality_path,
+        "FILE_OUT": location_1d_out_path,
+        "FILE_PHS": phs_file_path,
+        "FILTERED_LOCATIONS_FILE": filtered_locations_csv_path,
+        "FILTERED_PHASES_FILE": filtered_phases_csv_path,
+        "MAX_GAP": DD_MAX_GAP,
+        "MAX_RMS": DD_MAX_RMS,
+        "MAX_ERH": DD_MAX_ERH,
+        "MAX_ERZ": DD_MAX_ERZ,
+    })
 
 
 def read_data_file(filepath, skiprows, names_count):
@@ -492,6 +491,26 @@ def write_filtered_outputs(df_loc_final, df_phs_final):
     print(f"Filtered phases saved to: {FILTERED_PHASES_FILE}")
 
 
-if __name__ == "__main__":
+def run(ctx):
+    _apply_context(ctx)
+    main(FILE_OUT, FILE_LOC)
     df_loc_final, df_phs_final = read_and_filter_data()
     write_filtered_outputs(df_loc_final, df_phs_final)
+
+
+def cli():
+    from seismic_workflow.context import build_context
+
+    ctx = build_context("config.yaml")
+    _apply_context(ctx)
+    if len(sys.argv) >= 3:
+        main(sys.argv[1], sys.argv[2])
+    else:
+        run(ctx)
+
+
+run_location_filtering = run
+
+
+if __name__ == "__main__":
+    cli()

@@ -10,14 +10,23 @@ import os
 import sys
 
 import pandas as pd
-from config import (filtered_locations_csv_path, filtered_phases_csv_path,
-                    stations_csv_path, dd_output_file, dd_station_file)
 
-FILTERED_LOCATIONS_FILE = filtered_locations_csv_path
-FILTERED_PHASES_FILE = filtered_phases_csv_path
-STATIONS_FILE = stations_csv_path
-OUTPUT_FILE = dd_output_file
-STATION_FILE = dd_station_file
+FILTERED_LOCATIONS_FILE = None
+FILTERED_PHASES_FILE = None
+STATIONS_FILE = None
+OUTPUT_FILE = None
+STATION_FILE = None
+
+
+def _apply_context(ctx):
+    globals().update(ctx.legacy_globals())
+    globals().update({
+        "FILTERED_LOCATIONS_FILE": filtered_locations_csv_path,
+        "FILTERED_PHASES_FILE": filtered_phases_csv_path,
+        "STATIONS_FILE": stations_csv_path,
+        "OUTPUT_FILE": dd_output_file,
+        "STATION_FILE": dd_station_file,
+    })
 
 
 def parse_origin_time(t_str):
@@ -206,7 +215,8 @@ def create_station_file():
         print(f"Error writing station file: {e}")
 
 
-if __name__ == '__main__':
+def run(ctx):
+    _apply_context(ctx)
     df_loc_final, df_phs_final = read_filtered_data()
     
     if not df_loc_final.empty:
@@ -215,3 +225,16 @@ if __name__ == '__main__':
         print("No events passed the quality filters or could be matched. Output file not generated.")
         
     create_station_file()
+
+
+def main():
+    from seismic_workflow.context import build_context
+
+    run(build_context("config.yaml"))
+
+
+run_relative_relocation = run
+
+
+if __name__ == '__main__':
+    main()

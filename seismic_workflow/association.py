@@ -13,11 +13,6 @@ Created on Tue Jul 29 09:10:01 2025
 
 #import libraries
 import os
-from config import *
-
-# Set GMT library path before importing pygmt
-if GMT_LIBRARY_PATH:
-    os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
 
 import obspy
 from obspy.clients.fdsn import Client
@@ -35,13 +30,22 @@ import seaborn as sns
 import torch
 import warnings
 from gamma.utils import association
-import pygmt
 
 sns.set(font_scale=1.2)
 sns.set_style("ticks")
 
 
-if __name__ == "__main__":
+def _apply_context(ctx):
+    globals().update(ctx.legacy_globals(include_geo=True))
+
+
+def run(ctx):
+    _apply_context(ctx)
+    # Set GMT library path before importing pygmt
+    if GMT_LIBRARY_PATH:
+        os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
+    import pygmt
+
     # Define output directory
     os.makedirs(output_dir, exist_ok=True)
 
@@ -261,3 +265,16 @@ if __name__ == "__main__":
     
     # Show the plot
     fig.show()
+
+
+def main():
+    from seismic_workflow.context import build_context
+
+    run(build_context("config.yaml"))
+
+
+run_association = run
+
+
+if __name__ == "__main__":
+    main()
