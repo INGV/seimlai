@@ -7,12 +7,11 @@ Prepare HypoDD input files from filtered absolute locations.
 
 from datetime import datetime
 import os
-import sys
 
 import pandas as pd
 
-FILTERED_LOCATIONS_FILE = None
-FILTERED_PHASES_FILE = None
+from seismic_workflow.location_filtering import prepare_filtered_data
+
 STATIONS_FILE = None
 OUTPUT_FILE = None
 STATION_FILE = None
@@ -21,8 +20,6 @@ STATION_FILE = None
 def _apply_context(ctx):
     globals().update(ctx.legacy_globals())
     globals().update({
-        "FILTERED_LOCATIONS_FILE": filtered_locations_csv_path,
-        "FILTERED_PHASES_FILE": filtered_phases_csv_path,
         "STATIONS_FILE": stations_csv_path,
         "OUTPUT_FILE": dd_output_file,
         "STATION_FILE": dd_station_file,
@@ -59,33 +56,12 @@ def parse_origin_time(t_str):
         return None, None, None
 
 
-def read_filtered_data():
-    if not os.path.exists(FILTERED_LOCATIONS_FILE):
-        print(f"ERROR: Filtered locations file not found: {FILTERED_LOCATIONS_FILE}")
-        print("Run 07_locations_filtering.py before relative relocation.")
-        sys.exit(1)
-
-    if not os.path.exists(FILTERED_PHASES_FILE):
-        print(f"ERROR: Filtered phases file not found: {FILTERED_PHASES_FILE}")
-        print("Run 07_locations_filtering.py before relative relocation.")
-        sys.exit(1)
-
-    df_loc_final = pd.read_csv(FILTERED_LOCATIONS_FILE)
-    df_phs_final = pd.read_csv(FILTERED_PHASES_FILE)
-
-    if 'ID' in df_loc_final.columns:
-        df_loc_final['ID'] = df_loc_final['ID'].astype(int)
-    if 'ID' in df_phs_final.columns and not df_phs_final.empty:
-        df_phs_final['ID'] = df_phs_final['ID'].astype(int)
-
-    return df_loc_final, df_phs_final
-
-
 def create_hypodd_combined_file(df_loc_final, df_phs_final):
     """
     Generates the hypoDD combined input file, calculating travel times.
     """
     print(f"5. Starting generation of combined output file: {OUTPUT_FILE}")
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
 
     origin_times = {}
     for index, row in df_loc_final.iterrows():
@@ -217,12 +193,12 @@ def create_station_file():
 
 def run(ctx):
     _apply_context(ctx)
-    df_loc_final, df_phs_final = read_filtered_data()
+    df_loc_final, df_phs_final = prepare_filtered_data(ctx)
     
-    if not df_loc_final.empty:
-        create_hypodd_combined_file(df_loc_final, df_phs_final)
-    else:
-        print("No events passed the quality filters or could be matched. Output file not generated.")
+    if df_loc_final.empty:
+        print("No events passed the quality filters or could be matched. Creating an empty travel file.")
+
+    create_hypodd_combined_file(df_loc_final, df_phs_final)
         
     create_station_file()
 

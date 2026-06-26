@@ -3,14 +3,17 @@ from seismic_workflow.context import build_context, ensure_initial_directories
 
 def test_context_matches_expected_derived_values():
     ctx = build_context("config.yaml")
+    p_threshold = ctx.raw.model["p_threshold"]
+    s_threshold = ctx.raw.model["s_threshold"]
+    expected_thr = f"{int(p_threshold * 10):02d}-{int(s_threshold * 10):02d}"
 
     assert ctx.derived.start_day == 304
     assert ctx.derived.end_day == 304
-    assert ctx.derived.thr == "09-09"
+    assert ctx.derived.thr == expected_thr
     assert str(ctx.paths.project_root).endswith("Amatrice_catalog_test")
-    assert str(ctx.paths.output_picks_dir).endswith("output/output_picks_0.9")
-    assert str(ctx.paths.output_dir).endswith("output/output_catalog_0.9")
-    assert str(ctx.paths.location_1d_quality_path).endswith("DD/location-1D_09-09.quality")
+    assert str(ctx.paths.output_picks_dir).endswith(f"output/output_picks_{p_threshold}")
+    assert str(ctx.paths.output_dir).endswith(f"output/output_catalog_{p_threshold}")
+    assert str(ctx.paths.location_1d_quality_path).endswith(f"DD/location-1D_{expected_thr}.quality")
 
     gamma_config = ctx.derived.gamma_config
     assert gamma_config["x(km)"] == (230, 620)
@@ -28,8 +31,8 @@ def test_ensure_initial_directories_creates_dd_folder(tmp_path):
             **ctx.paths.__dict__,
             "project_root": tmp_path / "case",
             "output_base": tmp_path / "case" / "output",
-            "output_dir": tmp_path / "case" / "output" / "output_catalog_0.9",
-            "dd_dir": tmp_path / "case" / "output" / "output_catalog_0.9" / "DD",
+            "output_dir": tmp_path / "case" / "output" / f"output_catalog_{ctx.raw.model['p_threshold']}",
+            "dd_dir": tmp_path / "case" / "output" / f"output_catalog_{ctx.raw.model['p_threshold']}" / "DD",
         }
     )
 

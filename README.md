@@ -18,6 +18,12 @@ python main.py --help
 python main.py --config config.yaml
 ```
 
+After installing the package, the same CLI is available as:
+
+```bash
+seismic-workflow --config config.yaml
+```
+
 The user-editable settings are in [config.yaml](./config.yaml).
 
 ## Main CLI Commands
@@ -27,6 +33,8 @@ The user-editable settings are in [config.yaml](./config.yaml).
 | Command | What it does |
 | --- | --- |
 | `python main.py` | Run the full workflow. |
+| `python -m seismic_workflow.main` | Run the full workflow through the package module. |
+| `seismic-workflow` | Run the installed PyPI-style entrypoint. |
 | `python main.py --config config.yaml` | Run the full workflow with an explicit config file. |
 | `python main.py continue` | Continue from the HypoEllipse output check, stages `06` to `08`. |
 | `python main.py 03` | Run one stage by ID. |
@@ -37,7 +45,7 @@ The user-editable settings are in [config.yaml](./config.yaml).
 | `python main.py threshold-analysis` | Run optional threshold comparison plots. |
 | `python main.py cc-dd-test` | Run optional cross-correlation differential-time test. |
 
-## Single Stage Scripts
+## Single Stage Commands
 
 The easiest way to run one stage is through `main.py`:
 
@@ -45,35 +53,21 @@ The easiest way to run one stage is through `main.py`:
 python main.py 03
 ```
 
-The individual launcher scripts live in [cli/](./cli):
+Optional launchers are available inside the package:
 
 ```bash
-python cli/03_phase_picking_cnn.py
+python -m seismic_workflow.optional.plot_catalog
+python -m seismic_workflow.optional.cc_dd_non_testato
+python -m seismic_workflow.optional.analyse_thr_results
 ```
-
-| Script | Stage | What it does |
-| --- | --- | --- |
-| `01_download_data.py` | `01` | Downloads waveform data and station metadata. |
-| `02_data_cleaning.py` | `02` | Placeholder cleaning stage; currently leaves files unchanged. |
-| `03_phase_picking_cnn.py` | `03` | Runs CNN phase picking and writes sorted pick files. |
-| `04_phase_association_raw_catalog_building_gamma.py` | `04` | Associates picks with GaMMA and builds the raw catalog. |
-| `05_data_preparation_for_absolute_location.py` | `05` | Prepares HypoEllipse/Hypo71 input files. |
-| `06_absolute_location_hypoellipse.py` | `06` | Runs HypoEllipse with Docker and writes `location-1D.out`. |
-| `07_locations_filtering.py` | `07` | Parses and filters absolute-location results. |
-| `08_relative_relocation_hypodd.py` | `08` | Builds HypoDD relative-relocation input files. |
-| `gamma-analysis.py` | optional | Analyzes associated and unassociated GaMMA picks. |
-| `plot-catalog.py` | optional | Plots the catalog with PyGMT. |
-| `12_analyse_thr_results.py` | optional | Compares multiple threshold runs. |
-| `11_cc_DD_non_testato.py` | optional | Experimental cross-correlation DD test. |
 
 ## Repository Layout
 
 | Path | Purpose |
 | --- | --- |
-| `main.py` | Main CLI orchestrator for the whole workflow. |
+| `main.py` | Compatibility wrapper for the package CLI. |
 | `config.yaml` | User settings only. No calculations happen here. |
 | `environment.yml` | Conda environment definition. |
-| `cli/` | Organized CLI wrappers for individual stages. |
 | `seismic_workflow/` | Importable workflow implementation. |
 | `tests/` | Smoke tests for runtime context and derived settings. |
 
@@ -107,6 +101,8 @@ This is useful for notebooks, tests, new scripts, or a future interface around t
 
 | Module | Purpose |
 | --- | --- |
+| `main.py` | Main CLI orchestrator for the whole workflow. |
+| `optional/` | Optional launchers for plotting, threshold analysis, GaMMA analysis, and cross-correlation DD tests. |
 | `context.py` | Loads `config.yaml`, validates settings, builds derived paths/settings, and lazily creates heavy objects such as models, devices, transformers, and FDSN clients. |
 | `download.py` | Implementation for waveform/station download. |
 | `data_cleaning.py` | Implementation for the cleaning stage. |
@@ -144,7 +140,8 @@ This is useful for notebooks, tests, new scripts, or a future interface around t
 
 - `python main.py` runs the full workflow controller.
 - `python main.py 03` runs one stage by ID.
-- `python cli/03_phase_picking_cnn.py` runs the individual stage launcher.
+- `python -m seismic_workflow.main` runs the same controller through the package.
+- `python -m seismic_workflow.optional.plot_catalog` runs an optional package launcher.
 - `import seismic_workflow.phase_picking` reuses the implementation from Python code.
 
 Most users only need `main.py` and `config.yaml`.

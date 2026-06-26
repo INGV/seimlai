@@ -13,13 +13,14 @@ from pathlib import Path
 
 def parse_summary_line(line):
     """Support both origin formats and variable spacing in tail columns."""
-    # Format A: YYYYMMDD HH MM SS.SS ...
-    # CORREZIONE: (\d{2}) -> (\d{1,3}) per gestire lat/lon a singola cifra (es. 9 gradi)
+    # Format A: YYYYMMDD HH MM SS.SS lat lon depth ...
+    # Uses \s+ (not .*?) to reliably match single-digit hour/minute (e.g. '6 7 59.52').
+    # Depth may lack a leading zero (e.g. '.68'), so pattern allows optional leading dot.
     m = re.match(
-        r"\s*(\d{8}).*?(\d{1,2})\s+(\d{1,2})\s+([\d.]+)\s+"
-        r"(\d{1,3})([ns])\s*([\d.]+)\s+"   
+        r"\s*(\d{8})\s+(\d{1,2})\s+(\d{1,2})\s+([\d.]+)\s+"
+        r"(\d{1,3})([ns])\s*([\d.]+)\s+"
         r"(\d{1,3})([ew])\s*([\d.]+)\s+"
-        r"([\-]?\d+(?:\.\d+)?)\s+(.*)$",
+        r"([\-]?\.?\d+(?:\.\d+)?)\s+(.*)$",
         line, flags=re.IGNORECASE
     )
     HH = MM = SSf = None
@@ -28,12 +29,13 @@ def parse_summary_line(line):
         HH, MM, SSf = int(HHs), int(MMs), float(SSs)
     else:
         # Format B: YYYYMMDD <optional junk, like '*'> HHMM SS.SS ...
-        # CORREZIONE: (\d{2}) -> (\d{1,3}) per gestire lat/lon a singola cifra
+        # HHMM is 3-4 digits (e.g. '018' = HH=0, MM=18; '1342' = HH=13, MM=42).
+        # Depth may lack a leading zero (e.g. '.68').
         m = re.match(
             r"\s*(\d{8}).*?(\d{3,4})\s+([\d.]+)\s+"
             r"(\d{1,3})([ns])\s*([\d.]+)\s+"
             r"(\d{1,3})([ew])\s*([\d.]+)\s+"
-            r"([\-]?\d+(?:\.\d+)?)\s+(.*)$",
+            r"([\-]?\.?\d+(?:\.\d+)?)\s+(.*)$",
             line, flags=re.IGNORECASE
         )
         if not m:
@@ -213,8 +215,6 @@ import numpy as np
 FILE_LOC = None
 FILE_OUT = None
 FILE_PHS = None
-FILTERED_LOCATIONS_FILE = None
-FILTERED_PHASES_FILE = None
 
 MAX_GAP = None
 MAX_RMS = None
@@ -235,8 +235,6 @@ def _apply_context(ctx):
         "FILE_LOC": location_1d_quality_path,
         "FILE_OUT": location_1d_out_path,
         "FILE_PHS": phs_file_path,
-        "FILTERED_LOCATIONS_FILE": filtered_locations_csv_path,
-        "FILTERED_PHASES_FILE": filtered_phases_csv_path,
         "MAX_GAP": DD_MAX_GAP,
         "MAX_RMS": DD_MAX_RMS,
         "MAX_ERH": DD_MAX_ERH,
@@ -332,11 +330,12 @@ def read_and_filter_data():
     df_loc = df_loc_raw.iloc[:, :len(col_names_loc)]
     df_loc.columns = col_names_loc
 
+    # NOTE: ERH and ERZ in the .quality file are SEH/SEZ (standard errors in km),
+    # typically 3-10 km, so they are NOT filtered by MAX_ERH/MAX_ERZ (which target
+    # a different error metric). Only GAP and RMS_HYPO filters are applied here.
     df_loc_filtered = df_loc[
-        (df_loc['GAP'] < MAX_GAP) & 
-        (df_loc['RMS_HYPO'] < MAX_RMS) &
-        (df_loc['ERH'] < MAX_ERH) & 
-        (df_loc['ERZ'] < MAX_ERZ)
+        (df_loc['GAP'] < MAX_GAP) &
+        (df_loc['RMS_HYPO'] < MAX_RMS)
     ].copy()
 
     all_original_ids = generate_valid_event_ids()
@@ -483,19 +482,14 @@ def read_and_filter_data():
     return df_loc_final, df_phs_final
 
 
-def write_filtered_outputs(df_loc_final, df_phs_final):
-    os.makedirs(os.path.dirname(FILTERED_LOCATIONS_FILE), exist_ok=True)
-    df_loc_final.to_csv(FILTERED_LOCATIONS_FILE, index=False)
-    df_phs_final.to_csv(FILTERED_PHASES_FILE, index=False)
-    print(f"Filtered locations saved to: {FILTERED_LOCATIONS_FILE}")
-    print(f"Filtered phases saved to: {FILTERED_PHASES_FILE}")
+def prepare_filtered_data(ctx):
+    _apply_context(ctx)
+    main(FILE_OUT, FILE_LOC)
+    return read_and_filter_data()
 
 
 def run(ctx):
-    _apply_context(ctx)
-    main(FILE_OUT, FILE_LOC)
-    df_loc_final, df_phs_final = read_and_filter_data()
-    write_filtered_outputs(df_loc_final, df_phs_final)
+    prepare_filtered_data(ctx)
 
 
 def cli():

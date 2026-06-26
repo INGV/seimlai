@@ -26,8 +26,8 @@ model:
   model_type: original
   custom_model_path: null
   batch_size: 256
-  p_threshold: 0.9
-  s_threshold: 0.9
+  p_threshold: 0.6
+  s_threshold: 0.6
   wlength_seconds: 900
 
 gamma:
