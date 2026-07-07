@@ -8,7 +8,7 @@ Created on Mon Feb 16 11:16:16 2026
 
 import pandas as pd
 import os
-from config import *
+from seimlai.context import ensure_initial_directories
 
 ########################################################################
 # This script filters the best location of the GaMMA seismic catalog, 
@@ -16,41 +16,47 @@ from config import *
 # After the filtering, the files for Hypoellipse absolute location are provided.
 ########################################################################
 
-# --- Derived paths from config.py ---
-os.makedirs(h71_filtered_dir, exist_ok=True)
+def _apply_context(ctx):
+    globals().update(ctx.legacy_globals())
 
-# FILE PATHS (derived from config variables)
-filecat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
-filepic = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
 
-# LETTURA FILE
-df_catalogo = pd.read_csv(filecat)
-df_picks = pd.read_csv(filepic)
+def _load_filtered_inputs():
+    # --- Derived paths from runtime context ---
+    os.makedirs(h71_filtered_dir, exist_ok=True)
 
-# SORT CATALOGO
-df_catalogo['time'] = pd.to_datetime(df_catalogo['time'])
-df_catalogo = df_catalogo.sort_values('time')
+    # FILE PATHS (derived from config variables)
+    filecat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+    filepic = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
 
-# SORT PICKS E ASSOCIAZIONE ORIGIN TIME
-df_picks['timestamp'] = pd.to_datetime(df_picks['timestamp'])
-df_event_time = df_catalogo[['event_index', 'time']].copy()
-df_event_time.columns = ['event_idx', 'origin_time']
-df_picks = df_picks.merge(df_event_time, on='event_idx', how='left')
-df_picks = df_picks.sort_values(['origin_time', 'timestamp']).reset_index(drop=True)
+    # LETTURA FILE
+    df_catalogo = pd.read_csv(filecat)
+    df_picks = pd.read_csv(filepic)
 
-# ANALISI P e S
-df_picks['type'] = df_picks['type'].str.lower()
-grouped = df_picks.groupby(['event_idx', 'type']).size().unstack(fill_value=0)
-grouped.columns.name = None
-grouped = grouped.rename(columns={'p': 'num_p', 's': 'num_s'})
+    # SORT CATALOGO
+    df_catalogo['time'] = pd.to_datetime(df_catalogo['time'])
+    df_catalogo = df_catalogo.sort_values('time')
 
-# FILTRAGGIO EVENTI
-eventi_validi = grouped[(grouped['num_p'] >= h71_min_p) & (grouped['num_s'] >= h71_min_s)].copy()
-print(f"Number of filtered event: {len(eventi_validi)} on {df_picks['event_idx'].nunique()}")
+    # SORT PICKS E ASSOCIAZIONE ORIGIN TIME
+    df_picks['timestamp'] = pd.to_datetime(df_picks['timestamp'])
+    df_event_time = df_catalogo[['event_index', 'time']].copy()
+    df_event_time.columns = ['event_idx', 'origin_time']
+    df_picks = df_picks.merge(df_event_time, on='event_idx', how='left')
+    df_picks = df_picks.sort_values(['origin_time', 'timestamp']).reset_index(drop=True)
 
-# ESTRAZIONE PICKS VALIDI
-df_picks_filtrati = df_picks[df_picks['event_idx'].isin(eventi_validi.index)]
-df_picks_filtrati = df_picks_filtrati.merge(eventi_validi, left_on='event_idx', right_index=True)
+    # ANALISI P e S
+    df_picks['type'] = df_picks['type'].str.lower()
+    grouped = df_picks.groupby(['event_idx', 'type']).size().unstack(fill_value=0)
+    grouped.columns.name = None
+    grouped = grouped.rename(columns={'p': 'num_p', 's': 'num_s'})
+
+    # FILTRAGGIO EVENTI
+    eventi_validi = grouped[(grouped['num_p'] >= h71_min_p) & (grouped['num_s'] >= h71_min_s)].copy()
+    print(f"Number of filtered event: {len(eventi_validi)} on {df_picks['event_idx'].nunique()}")
+
+    # ESTRAZIONE PICKS VALIDI
+    df_picks_filtrati = df_picks[df_picks['event_idx'].isin(eventi_validi.index)]
+    df_picks_filtrati = df_picks_filtrati.merge(eventi_validi, left_on='event_idx', right_index=True)
+    return df_catalogo, df_picks_filtrati
 
 # --- FUNZIONI DI FORMATTAZIONE E SCRITTURA ---
 
@@ -167,11 +173,6 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
             f.write(''.join(sep) + '\n')
 
 
-# ESECUZIONE CREAZIONE FILE PHS
-write_phs(df_picks_filtrati, df_catalogo, h71_filtered_dir)
-
-# --- CREAZIONE FILE H71 ---
-
 def format_hypo71_coords(value, is_lat=True):
     degrees = int(abs(value))
     minutes = (abs(value) - degrees) * 60
@@ -228,10 +229,6 @@ def write_h71_file(df_catalogo, df_picks_filtrati, output_path):
             row[52:58]  = list(eid_str)
 
             f.write("".join(row) + "\n")
-
-output_h71 = os.path.join(h71_filtered_dir, "out.h71")
-write_h71_file(df_catalogo, df_picks_filtrati, output_h71)
-
 
 # --- CONVERSIONE PESI E RENAME ID ---
 
@@ -299,12 +296,6 @@ def converti_phs_file(file_input, file_output, debug=False):
 
             fout.write(''.join(linea_out).rstrip() + '\n')
 
-phs_input = os.path.join(h71_filtered_dir, "out.phs")
-phs_output = os.path.join(h71_filtered_dir, "out_conv.phs")
-converti_phs_file(phs_input, phs_output, debug=False)
-
-# --- CONVERSIONE ID SU FILE H71 ---
-
 def convert_h71_ids(input_path):
     with open(input_path, "r") as f:
         lines = f.readlines()
@@ -333,4 +324,100 @@ def convert_h71_ids(input_path):
 
     print(f"File H71 update saved in: {output_path}")
 
-convert_h71_ids(os.path.join(h71_filtered_dir, "out.h71"))
+def dec_to_degmin(dec_deg, is_lat=True):
+    """
+    Convert decimal degrees to degrees + minutes format.
+    Example: 42.8295 -> '42N49.77'
+    """
+    degrees = int(dec_deg)
+    minutes = abs(dec_deg - degrees) * 60
+    direction = ('N' if dec_deg >= 0 else 'S') if is_lat else ('E' if dec_deg >= 0 else 'W')
+    return f"{abs(degrees):02d}{direction}{minutes:05.2f}"
+
+
+def convert_station_file_for_hypoellipse():
+    df = pd.read_csv(os.path.join(case_study_dir, station_file_name))
+
+    os.makedirs(h71_filtered_dir, exist_ok=True)
+
+    lines = []
+
+    for _, row in df.iterrows():
+        code_full = str(row["station"])
+        code_len = len(code_full)
+        code = code_full[:5]
+
+        lat = dec_to_degmin(row["latitude"], is_lat=True)
+        lon = dec_to_degmin(row["longitude"], is_lat=False)
+        elev = int(round(row["elevation"]))
+        depth = 0
+        weight = 1.00
+
+        elev_str = f"{elev:>5}"
+
+        if code_len == 3:
+            line1 = f" {code}{lat}  {lon}{elev_str}"
+        elif code_len == 4:
+            line1 = f"{code:<4}{lat}  {lon}{elev_str}"
+        elif code_len >= 5:
+            base_line1 = f"{code[:4]:<4}{lat}  {lon}{elev_str}"
+            padding = " " * max(0, 79 - len(base_line1))
+            line1 = base_line1 + padding + code[4]
+        else:
+            line1 = f"{code[:4]:<4}{lat}  {lon}{elev_str}"
+
+        if code_len == 3:
+            line2 = f" {code}*{depth:6d}{weight:10.2f}"
+        elif code_len == 4:
+            line2 = f"{code[:4]:<4}*{depth:6d}{weight:10.2f}"
+        elif code_len >= 5:
+            base_line2 = f"{code[:4]:<4}*{depth:6d}{weight:10.2f}"
+            padding2 = " " * max(0, 79 - len(base_line2))
+            line2 = base_line2 + padding2 + code[4]
+        else:
+            line2 = f"{code[:4]:<4}*{depth:6d}{weight:10.2f}"
+
+        lines.append(line1)
+        lines.append(line2)
+
+    output_path = os.path.join(h71_filtered_dir, "all.he")
+    with open(output_path, "w") as f:
+        for line in lines:
+            f.write(line + "\n")
+
+    os.makedirs(dd_dir, exist_ok=True)
+    print(f"Station file saved in: {output_path}")
+
+
+def run(ctx):
+    ensure_initial_directories(ctx)
+    _apply_context(ctx)
+    df_catalogo, df_picks_filtrati = _load_filtered_inputs()
+
+    # ESECUZIONE CREAZIONE FILE PHS
+    write_phs(df_picks_filtrati, df_catalogo, h71_filtered_dir)
+
+    # --- CREAZIONE FILE H71 ---
+    output_h71 = os.path.join(h71_filtered_dir, "out.h71")
+    write_h71_file(df_catalogo, df_picks_filtrati, output_h71)
+
+    phs_input = os.path.join(h71_filtered_dir, "out.phs")
+    phs_output = os.path.join(h71_filtered_dir, "out_conv.phs")
+    converti_phs_file(phs_input, phs_output, debug=False)
+
+    # --- CONVERSIONE ID SU FILE H71 ---
+    convert_h71_ids(os.path.join(h71_filtered_dir, "out.h71"))
+    convert_station_file_for_hypoellipse()
+
+
+def main():
+    from seimlai.context import build_context
+
+    run(build_context("config.yaml"))
+
+
+run_absolute_location_prep = run
+
+
+if __name__ == "__main__":
+    main()

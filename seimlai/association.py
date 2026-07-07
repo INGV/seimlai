@@ -13,11 +13,6 @@ Created on Tue Jul 29 09:10:01 2025
 
 #import libraries
 import os
-from config import *
-
-# Set GMT library path before importing pygmt
-if GMT_LIBRARY_PATH:
-    os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
 
 import obspy
 from obspy.clients.fdsn import Client
@@ -35,13 +30,22 @@ import seaborn as sns
 import torch
 import warnings
 from gamma.utils import association
-import pygmt
 
 sns.set(font_scale=1.2)
 sns.set_style("ticks")
 
 
-if __name__ == "__main__":
+def _apply_context(ctx):
+    globals().update(ctx.legacy_globals(include_geo=True))
+
+
+def run(ctx):
+    _apply_context(ctx)
+    # Set GMT library path before importing pygmt
+    if GMT_LIBRARY_PATH:
+        os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
+    import pygmt
+
     # Define output directory
     os.makedirs(output_dir, exist_ok=True)
 
@@ -63,6 +67,8 @@ if __name__ == "__main__":
     # UPLOAD PICKS FILE
     sorted_file = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
+    if "Amp" not in picks_df.columns and "Amplitude" in picks_df.columns:
+        picks_df = picks_df.rename(columns={"Amplitude": "Amp"})
     # Estract nework and station name
     # Extract station name from dot-notation if present (e.g. "IV.INTR." -> "INTR")
     # If names are already clean (e.g. "ED01"), leave them as-is
@@ -79,7 +85,6 @@ if __name__ == "__main__":
         pick_df.append({
             "id": row['Station'], #Station Name
             "timestamp": row["Datetime"], # Arrival time
-            "amp": row["Amplitude"], # Log10 peak amplitude
             "prob": row["Probability"],  # PhaseNet probability
             "amp": row["Amp"],  #phase amplitude
             "type": row["Wave_Type"].lower() # waves type (p or s)
@@ -138,7 +143,7 @@ if __name__ == "__main__":
     if missing_events:
         print(f"Warning: {len(missing_events)} event_idx not match into the catalog!")
     picks_with_events.drop(columns=["event_index"], inplace=True, errors="ignore")
-    picks_with_events = picks_with_events[["id", "timestamp", "prob", "type", "event_idx", "prob_gamma"]]
+    picks_with_events = picks_with_events[["id", "timestamp", "prob", "amp", "type", "event_idx", "prob_gamma"]]
     # Save all picks (the id .-1 is referred to un-associated picks)
     output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
     picks_with_events.to_csv(output_gamma_picks, index=False)
@@ -260,3 +265,16 @@ if __name__ == "__main__":
     
     # Show the plot
     fig.show()
+
+
+def main():
+    from seimlai.context import build_context
+
+    run(build_context("config.yaml"))
+
+
+run_association = run
+
+
+if __name__ == "__main__":
+    main()

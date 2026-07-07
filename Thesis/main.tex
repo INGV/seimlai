@@ -1,0 +1,58 @@
+% !TeX encoding = UTF-8
+% !TeX program = pdflatex
+% !TeX spellcheck = en_US
+
+\documentclass[english,binding=0.6cm]{sapthesis}
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{hyperref}
+
+\hypersetup{
+  pdftitle={TODO Thesis Title},
+  pdfauthor={TODO Author Name}
+}
+
+\title{TODO Thesis Title}
+\subtitle{Automatic Seismic Catalog Generation with Machine Learning}
+\author{TODO Author Name}
+\IDnumber{TODO Student ID}
+\course{TODO Official Degree Course Name}
+\courseorganizer{TODO Faculty or Department}
+\AcademicYear{TODO Academic Year}
+\advisor{TODO Advisor Name}
+\authoremail{TODO author.email@example.com}
+\copyyear{2026}
+\thesistype{Bachelor Thesis}
+
+\begin{document}
+
+\frontmatter
+\maketitle
+
+\begin{abstract}
+TODO: Write a concise summary of the thesis, describing the software pipeline, the use of machine learning for seismic phase picking, and the validation performed on the test catalog.
+\end{abstract}
+
+\tableofcontents
+
+\mainmatter
+
+\input{chapters/01_introduction}
+\input{chapters/02_application_and_technological_background}
+\input{chapters/03_pipeline_design}
+\input{chapters/04_implementation}
+\input{chapters/05_optimizations_and_implemented_developments}
+\input{chapters/06_results_and_validation}
+\input{chapters/07_future_developments}
+\input{chapters/08_conclusions}
+
+\backmatter
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{\bibname}
+\bibliographystyle{sapthesis}
+\bibliography{references}
+
+\end{document}
