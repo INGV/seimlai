@@ -78,8 +78,9 @@ def parse_travel_dat(filepath):
                 })
     return catalog
 
-def get_waveform(sta, time, phase, network=CC_NETWORK):
+def get_waveform(sta, time, phase, network=None):
     """Carica waveform seguendo lo screenshot: YEAR/NET/STA/CHAN.D/NET.STA..CHAN.D.YEAR.JDAY"""
+    network = CC_NETWORK if network is None else network
     year = str(time.year)
     jday = time.strftime("%j")
     # P su Z, S su E (come da screenshot MZ05 ha EHE, EHN, EHZ)
