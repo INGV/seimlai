@@ -20,14 +20,15 @@ stations:
   stations_list: "*"
   fdsn_clients:
     - IRIS
+    - INGV
 
 model:
   neural_network: PhaseNet
   model_type: original
   custom_model_path: null
   batch_size: 256
-  p_threshold: 0.6
-  s_threshold: 0.6
+  p_threshold: 0.8
+  s_threshold: 0.8
   wlength_seconds: 900
 
 gamma:
@@ -101,9 +102,9 @@ dd:
 script11:
   max_dist_km_cc: 3.0
   cc_threshold: 0.7
-  win_before: 0.2
-  win_after: 0.8
-  cc_max_lag: 0.5
+  win_before: 0.1
+  win_after: 0.5
+  cc_max_lag: 0.3
   freq_min: 2.0
   freq_max: 15.0
   network: 3A

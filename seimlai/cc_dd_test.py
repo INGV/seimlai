@@ -5,6 +5,7 @@ Created on Fri Jan 23 11:09:52 2026
 
 @author: rossella.fonzetti
 """
+import warnings
 import os
 import pandas as pd
 import numpy as np
@@ -105,7 +106,10 @@ def run(ctx):
     event_ids = sorted(catalog.keys())
 
     print(f"Calcolo CC su {len(event_ids)} eventi selezionati...")
-
+    warnings.filterwarnings(
+        "ignore",
+        message="Maximum of cross correlation lower than*"
+    )
     with open(OUTPUT_DTCC, "w") as f_out:
         for i in tqdm(range(len(event_ids)), desc="Loop Eventi"):
             id1 = event_ids[i]
@@ -128,8 +132,10 @@ def run(ctx):
                 
                 for sta, phase in common:
                     # Tempi di arrivo assoluti: Origin Time + Travel Time
-                    t1 = ev1['ot'] + picks1[(sta, phase)]
-                    t2 = ev2['ot'] + picks2[(sta, phase)]
+                    tt1 = picks1[(sta, phase)]
+                    tt2 = picks2[(sta, phase)]
+                    t1 = ev1['ot'] + tt1
+                    t2 = ev2['ot'] + tt2
                     
                     tr1 = get_waveform(sta, t1, phase)
                     tr2 = get_waveform(sta, t2, phase)
@@ -137,17 +143,27 @@ def run(ctx):
                     if tr1 and tr2:
                         try:
                             shift, cc_val = xcorr_pick_correction(
-                                t1, tr1, t2, tr2, WIN_BEFORE, WIN_AFTER, CC_MAX_LAG
+                                t1, tr1, t2, tr2, WIN_BEFORE, WIN_AFTER, CC_MAX_LAG,
                             )
                             
                             if cc_val >= CC_THRESHOLD:
+                                dt_cc = (tt1 - tt2) - shift
+                                # Controllo di sicurezza: scarta valori non fisici.
+                                if abs(dt_cc) > 10.0:
+                                    print(
+                                        f"[WARN] dt.cc sospetto scartato: "
+                                        f"ev {id1}-{id2}, {sta} {phase}, "
+                                        f"tt1={tt1:.4f}, tt2={tt2:.4f}, "
+                                        f"shift={shift:.4f}, dt_cc={dt_cc:.4f}"
+                                        )
+                                    continue
                                 if not header_written:
                                     f_out.write(f"# {id1:>9} {id2:>9} 0.0\n")
                                     header_written = True
-                                
-                                dt_cc = (t1 - t2) - shift
                                 f_out.write(f"{sta:<5} {dt_cc:10.4f} {cc_val:7.4f} {phase}\n")
-                        except: continue
+                        except Exception as exc:
+                            print(f"[WARN] CC fallita: ev {id1}-{id2}, {sta} {phase}: {exc}")
+                        continue
 
     print(f"Fatto! File dt.cc generato in {dd_dir}")
 
