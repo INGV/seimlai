@@ -1,4 +1,4 @@
-from seismic_workflow.context import build_context, ensure_initial_directories
+from seimlai.context import build_context, ensure_initial_directories
 
 
 def test_context_matches_expected_derived_values():

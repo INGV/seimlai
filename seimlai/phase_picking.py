@@ -55,7 +55,7 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
 def process_station_worker(args):
     # IMPORT LOCALE: Il worker carica dal config solo i parametri del modello.
     # Questo permette alla GPU di attivarsi in totale sicurezza per ogni processo.
-    from seismic_workflow.context import build_context
+    from seimlai.context import build_context
 
     # FRENO CPU: Evita l'ingorgo matematico tra i 16 worker attivi
     torch.set_num_threads(1)
@@ -552,7 +552,7 @@ def run(ctx):
 
 
 def main():
-    from seismic_workflow.context import build_context
+    from seimlai.context import build_context
 
     run(build_context("config.yaml"))
 

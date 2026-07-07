@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from seismic_workflow.main import main
+from seimlai.main import main
 
 
 if __name__ == "__main__":

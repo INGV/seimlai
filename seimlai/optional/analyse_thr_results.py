@@ -3,7 +3,7 @@
 
 import argparse
 
-from seismic_workflow.optional._context import build_optional_context
+from seimlai.optional._context import build_optional_context
 
 
 def main():
@@ -11,7 +11,7 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="Path to the YAML configuration file.")
     args = parser.parse_args()
 
-    from seismic_workflow.threshold_analysis import run
+    from seimlai.threshold_analysis import run
 
     run(build_optional_context(args.config))
 

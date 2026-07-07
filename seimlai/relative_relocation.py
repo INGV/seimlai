@@ -10,7 +10,7 @@ import os
 
 import pandas as pd
 
-from seismic_workflow.location_filtering import prepare_filtered_data
+from seimlai.location_filtering import prepare_filtered_data
 
 STATIONS_FILE = None
 OUTPUT_FILE = None
@@ -204,7 +204,7 @@ def run(ctx):
 
 
 def main():
-    from seismic_workflow.context import build_context
+    from seimlai.context import build_context
 
     run(build_context("config.yaml"))
 

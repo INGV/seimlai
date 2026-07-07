@@ -1,4 +1,4 @@
-from seismic_workflow.context import build_context, ensure_initial_directories
+from seimlai.context import build_context, ensure_initial_directories
 
 
 def build_optional_context(config_path: str = "config.yaml"):

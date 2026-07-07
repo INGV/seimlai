@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-seismic-workflow = "seismic_workflow.main:main"
+seismic-workflow = "seimlai.main:main"
 
 [tool.setuptools.packages.find]
-include = ["seismic_workflow*"]
+include = ["seimlai*"]

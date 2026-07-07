@@ -8,7 +8,7 @@ Created on Mon Feb 16 11:16:16 2026
 
 import pandas as pd
 import os
-from seismic_workflow.context import ensure_initial_directories
+from seimlai.context import ensure_initial_directories
 
 ########################################################################
 # This script filters the best location of the GaMMA seismic catalog, 
@@ -411,7 +411,7 @@ def run(ctx):
 
 
 def main():
-    from seismic_workflow.context import build_context
+    from seimlai.context import build_context
 
     run(build_context("config.yaml"))
 

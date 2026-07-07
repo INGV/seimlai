@@ -179,7 +179,7 @@ def run(ctx):
 
 
 def main():
-    from seismic_workflow.context import build_context
+    from seimlai.context import build_context
 
     run(build_context("config.yaml"))
 
