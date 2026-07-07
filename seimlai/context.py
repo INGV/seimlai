@@ -321,7 +321,7 @@ def build_context(config_path: str | Path = "config.yaml") -> RuntimeContext:
     output_base = project_root / "output"
     output_dir = output_base / f"output_catalog_{p_threshold}"
     h71_filtered_dir = output_dir / "filtered_data"
-    dd_dir = output_dir / "DD"
+    dd_dir = output_dir / "refined_localizations"
     station_file_name = "stations.csv"
 
     paths = Paths(
