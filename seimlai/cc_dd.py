@@ -187,6 +187,10 @@ def _process_event_pair(task):
                 warnings_out.append(f"[WARN] CC fallita: ev {id1}-{id2}, {sta} {phase}: {exc}")
             continue
 
+    reading_count = len(lines) - 1 if header_written else 0
+    if reading_count < 4:
+        lines = []
+
     return task_index, lines, warnings_out
 
 def _process_event_pair_chunk(tasks):
