@@ -7,6 +7,7 @@ Created on Fri Jan 23 11:09:52 2026
 """
 import warnings
 import os
+from glob import glob
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import pandas as pd
 import numpy as np
@@ -93,19 +94,25 @@ def parse_travel_dat(filepath):
                 })
     return catalog
 
+def _waveform_priority(path):
+    channel = os.path.basename(os.path.dirname(path)).removesuffix(".D")
+    return ({"HH": 0, "EH": 1, "BH": 2}.get(channel[:2], 3), path)
+
+
 def get_waveform(sta, time, phase, network=None):
-    """Carica waveform seguendo lo screenshot: YEAR/NET/STA/CHAN.D/NET.STA..CHAN.D.YEAR.JDAY"""
-    network = CC_NETWORK if network is None else network
+    """Carica la waveform migliore che corrisponde ai pattern di network e canale."""
+    network = str(CC_NETWORK if network is None else network).upper()
     year = str(time.year)
     jday = time.strftime("%j")
-    chan = CC_P_CHANNEL if phase == 'P' else CC_S_CHANNEL
+    chan = str(CC_P_CHANNEL if phase == 'P' else CC_S_CHANNEL).upper()
     
-    path = os.path.join(WAVEFORM_DIR, year, network, sta, f"{chan}.D", 
-                        f"{network}.{sta}..{chan}.D.{year}.{jday}")
+    path_pattern = os.path.join(WAVEFORM_DIR, year, network, sta, f"{chan}.D",
+                                f"{network}.{sta}..{chan}.D.{year}.{jday}")
+    matching_paths = sorted(glob(path_pattern), key=_waveform_priority)
     
-    if os.path.exists(path):
+    if matching_paths:
         try:
-            st = obspy.read(path)
+            st = obspy.read(matching_paths[0])
             st.detrend("demean").filter("bandpass", freqmin=FREQ_MIN, freqmax=FREQ_MAX)
             return st[0]
         except: return None
