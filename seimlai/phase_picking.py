@@ -186,12 +186,16 @@ def process_station_worker(args):
     P_THRESHOLD = worker_globals["P_THRESHOLD"]
     S_THRESHOLD = worker_globals["S_THRESHOLD"]
     model = worker_globals["model"]
+    model_device = next(model.parameters()).device
+    expected_device, _ = ctx.device
+    if model_device.type != expected_device.type:
+        raise RuntimeError(f"Model device {model_device} does not match selected device {expected_device}.")
     logs = []
     pick_df_list = []
     
     # STAMPA LIVE
-    print(f"🔄 [Worker] -> Sto processando la stazione: {net}.{stat} (Giorno {day})", flush=True)
-    logs.append(f"[{net}.{stat}] Inizio elaborazione...")
+    print(f"🔄 [Worker {model_device}] -> Sto processando la stazione: {net}.{stat} (Giorno {day})", flush=True)
+    logs.append(f"[{net}.{stat}] Inizio elaborazione su {model_device}...")
     
     stream = Stream()
     stream_pick = Stream()
@@ -421,7 +425,9 @@ def execute_phase_picking(ctx):
         NUM_WORKERS = slurm_cpus
 
     print(f"Avvio elaborazione parallela con {NUM_WORKERS} WORKERS!", flush=True)
+    print(f"Dispositivo inferenza: {device_name} ({device})", flush=True)
     log_file.write(f"Workers: {NUM_WORKERS}\n")
+    log_file.write(f"Device: {device_name} ({device})\n")
 
     # 4. CICLO SUI GIORNI
     for current_year, day in _iter_year_days():

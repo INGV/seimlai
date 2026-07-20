@@ -12,7 +12,7 @@ geography:
 dates:
   starttime: "2016-10-30"
   endtime: "2016-10-30"
-  year: 2016
+  year: "2016-2017"
 
 stations:
   network: "*"
@@ -156,6 +156,8 @@ hypodd:
 
 # 09_cc_dd.py
 cc_dd:
+  use_gpu: true
+  gpu_batch_size: auto
   max_dist_km_cc: 3.0
   cc_threshold: 0.7
   win_before: 0.1

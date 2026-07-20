@@ -232,6 +232,8 @@ class RuntimeContext:
             "CC_P_CHANNEL": cc_dd_cfg["p_channel"],
             "CC_S_CHANNEL": cc_dd_cfg["s_channel"],
             "CC_MAX_ABS_DT_SECONDS": cc_dd_cfg["max_abs_dt_seconds"],
+            "CC_USE_GPU": cc_dd_cfg["use_gpu"],
+            "CC_GPU_BATCH_SIZE": cc_dd_cfg["gpu_batch_size"],
             "THRESHOLDS_MAP_12": self.raw.threshold_analysis["thresholds_map"],
             "THRESHOLD_ANALYSIS_DPI": self.raw.threshold_analysis["dpi"],
             "base_dir": str(self.paths.base_dir),
@@ -318,7 +320,7 @@ def validate_config(raw: dict[str, Any]) -> None:
         "hypoellipse_check": ["docker_image", "docker_start_timeout_seconds"],
         "dd": ["max_gap", "max_rms", "max_erh", "max_erz"],
         "hypodd": ["docker_image", "docker_start_timeout_seconds", "dimensions", "ph2dt", "relocation", "velocity_model"],
-        "cc_dd": ["max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "p_channel", "s_channel", "max_abs_dt_seconds"],
+        "cc_dd": ["use_gpu", "gpu_batch_size", "max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "p_channel", "s_channel", "max_abs_dt_seconds"],
         "threshold_analysis": ["dpi", "thresholds_map"],
     }
     missing = []
@@ -377,10 +379,12 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
     h71_filtered_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypoellipse" / "input"
     hypoellipse_dir = h71_filtered_dir.parent
     hypoellipse_output_dir = hypoellipse_dir / "output"
-    dd_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypodd" / "input"
-    hypodd_dir = dd_dir.parent
+    hypodd_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypodd"
+    dd_dir = hypodd_dir / "ph2dt" / "input"
+    ph2dt_output_dir = hypodd_dir / "ph2dt" / "output"
+    hypodd_input_dir = hypodd_dir / "input"
     hypodd_output_dir = hypodd_dir / "output"
-    hypodd_run_dir = hypodd_dir / "input&output"
+    hypodd_run_dir = ph2dt_output_dir
     station_file_name = "stations.csv"
 
     paths = Paths(
@@ -402,7 +406,7 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
         hypoellipse_output_dir=hypoellipse_output_dir,
         dd_dir=dd_dir,
         hypodd_dir=hypodd_dir,
-        hypodd_input_dir=dd_dir,
+        hypodd_input_dir=hypodd_input_dir,
         hypodd_output_dir=hypodd_output_dir,
         download_log_path=archive_dir / "download_log.txt",
         log_file_path=threshold_dir / f"output_picks_{p_threshold}" / "phase_picking_log.txt",
@@ -414,11 +418,11 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
         stations_csv_path=archive_dir / station_file_name,
         dd_output_file=dd_dir / f"travel_{thr}.dat",
         dd_station_file=dd_dir / f"station_{thr}.dat",
-        dd_dtcc_file=dd_dir / "dt.cc",
-        dd_dtct_file=hypodd_run_dir / "dt.ct",
+        dd_dtcc_file=hypodd_input_dir / "dt.cc",
+        dd_dtct_file=hypodd_input_dir / "dt.ct",
         hypodd_run_dir=hypodd_run_dir,
         hypodd_ph2dt_input_path=dd_dir / "ph2dt.inp",
-        hypodd_input_path=dd_dir / "hypoDD.inp",
+        hypodd_input_path=hypodd_input_dir / "hypoDD.inp",
         hypodd_reloc_path=hypodd_output_dir / "hypoDD.reloc",
         csv_filename_12=f"seismic_catalog_with_latlon_{raw.dates['year']}_{starttime.julday:03d}_{endtime.julday:03d}.csv",
         output_bar_path_12=threshold_comparison_dir / "grouped_bar_charts.pdf",
@@ -448,6 +452,7 @@ def ensure_initial_directories(ctx: RuntimeContext) -> None:
         ctx.paths.gamma_dir,
         ctx.paths.hypoellipse_input_dir,
         ctx.paths.hypoellipse_output_dir,
+        ctx.paths.dd_dir,
         ctx.paths.hypodd_input_dir,
         ctx.paths.hypodd_run_dir,
         ctx.paths.hypodd_output_dir,
