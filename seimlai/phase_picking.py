@@ -10,6 +10,7 @@ import time
 import re
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -19,6 +20,13 @@ from obspy import read, Stream, UTCDateTime, read_inventory
 
 def _apply_context(ctx, *, include_device=False):
     globals().update(ctx.legacy_globals(include_device=include_device))
+
+
+def _iter_year_days():
+    current_date = starttime.date
+    while current_date <= endtime.date:
+        yield current_date.year, current_date.timetuple().tm_yday
+        current_date += timedelta(days=1)
 
 
 # =====================================================================
@@ -399,7 +407,7 @@ def execute_phase_picking(ctx):
     os.makedirs(output_picks_dir, exist_ok=True)
 
     log_file = open(log_file_path, "w")
-    log_file.write(f"PhaseNet Parallel Picking Log - Year: {year}, Days: {start_day} to {end_day}\n")
+    log_file.write(f"PhaseNet Parallel Picking Log - Years: {year}, Dates: {starttime.date} to {endtime.date}\n")
     log_file.write("="*60 + "\n")
 
     overall_start_time = time.time()
@@ -416,21 +424,22 @@ def execute_phase_picking(ctx):
     log_file.write(f"Workers: {NUM_WORKERS}\n")
 
     # 4. CICLO SUI GIORNI
-    for day in range(start_day, end_day + 1):
-        log_file.write(f"\n--- Processing day: {day} ---\n")
-        print(f"\nProcessing day: {day}", flush=True)
+    for current_year, day in _iter_year_days():
+        log_file.write(f"\n--- Processing year {current_year}, day: {day} ---\n")
+        print(f"\nProcessing year {current_year}, day: {day}", flush=True)
     
-        daily_csv = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
+        daily_csv = os.path.join(output_picks_dir, f"picks_{current_year}_{day:03d}.csv")
         if os.path.exists(daily_csv):
             os.remove(daily_csv)
 
-        if not os.path.exists(waveform_base):
+        current_waveform_base = os.path.join(root_dir, str(current_year))
+        if not os.path.exists(current_waveform_base):
             continue
 
         # Preparazione dei pacchetti di lavoro (tasks) per le stazioni
         tasks = []
-        for net in sorted(os.listdir(waveform_base)):
-            net_path = os.path.join(waveform_base, net)
+        for net in sorted(os.listdir(current_waveform_base)):
+            net_path = os.path.join(current_waveform_base, net)
             if not os.path.isdir(net_path): continue
 
             for stat in sorted(os.listdir(net_path)):
@@ -438,7 +447,7 @@ def execute_phase_picking(ctx):
                 if not os.path.isdir(stat_path): continue
             
                 inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
-                tasks.append((net, stat, day, stat_path, inv_path, year, str(ctx.config_path)))
+                tasks.append((net, stat, day, stat_path, inv_path, current_year, str(ctx.config_path)))
 
         # Esecuzione in parallelo
         all_daily_picks = []
@@ -528,14 +537,14 @@ def run_sort_picks(ctx):
 
     all_dfs = []
 
-    for day in range(start_day, end_day + 1):
-        inputfile = os.path.join(output_picks_dir, f"picks_{year}_{day:03d}.csv")
+    for current_year, day in _iter_year_days():
+        inputfile = os.path.join(output_picks_dir, f"picks_{current_year}_{day:03d}.csv")
         if os.path.exists(inputfile):
             print(f"Reading file: {inputfile}")
             df = pd.read_csv(inputfile)
             all_dfs.append(df)
         else:
-            print(f"Warning: File not found for day {day}: {inputfile}")
+            print(f"Warning: File not found for year {current_year}, day {day}: {inputfile}")
 
     if all_dfs:
         # Concatenate all dataframes
