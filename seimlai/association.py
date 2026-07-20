@@ -92,7 +92,7 @@ def run(ctx):
     pick_df = pd.DataFrame(pick_df)
     
     #UPLOAD STATIONS FILE
-    stations_df = process_stations(os.path.join(case_study_dir, "stations.csv"))
+    stations_df = process_stations(stations_csv_path)
     stations_df["elevation"] = pd.to_numeric(stations_df["elevation"], errors="coerce")
     
     station_df = pd.DataFrame({
@@ -270,7 +270,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_association = run

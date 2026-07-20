@@ -14,27 +14,40 @@ class RawConfig:
     dates: dict[str, Any]
     stations: dict[str, Any]
     model: dict[str, Any]
+    phase_picking: dict[str, Any]
     gamma: dict[str, Any]
     analysis: dict[str, Any]
     plotting: dict[str, Any]
     hypoellipse: dict[str, Any]
+    hypoellipse_check: dict[str, Any]
     dd: dict[str, Any]
-    script11: dict[str, Any]
-    script12: dict[str, Any]
+    hypodd: dict[str, Any]
+    cc_dd: dict[str, Any]
+    threshold_analysis: dict[str, Any]
 
 
 @dataclass(frozen=True)
 class Paths:
     base_dir: Path
     project_root: Path
+    archive_dir: Path
     root_dir: Path
     inventory_dir: Path
     waveform_base: Path
     output_base: Path
+    threshold_dir: Path
+    threshold_comparison_dir: Path
     output_picks_dir: Path
     output_dir: Path
+    gamma_dir: Path
     h71_filtered_dir: Path
+    hypoellipse_dir: Path
+    hypoellipse_input_dir: Path
+    hypoellipse_output_dir: Path
     dd_dir: Path
+    hypodd_dir: Path
+    hypodd_input_dir: Path
+    hypodd_output_dir: Path
     download_log_path: Path
     log_file_path: Path
     location_1d_out_path: Path
@@ -46,6 +59,11 @@ class Paths:
     dd_output_file: Path
     dd_station_file: Path
     dd_dtcc_file: Path
+    dd_dtct_file: Path
+    hypodd_run_dir: Path
+    hypodd_ph2dt_input_path: Path
+    hypodd_input_path: Path
+    hypodd_reloc_path: Path
     csv_filename_12: str
     output_bar_path_12: Path
     output_line_path_12: Path
@@ -157,8 +175,9 @@ class RuntimeContext:
         include_fdsn: bool = False,
     ) -> dict[str, Any]:
         model_cfg = self.raw.model
+        phase_picking_cfg = self.raw.phase_picking
         plotting_cfg = self.raw.plotting
-        script11_cfg = self.raw.script11
+        cc_dd_cfg = self.raw.cc_dd
         legacy = {
             "case_study_name": self.raw.case_study["name"],
             "PERSONAL_FOLDER": self.raw.case_study["personal_folder"],
@@ -181,6 +200,8 @@ class RuntimeContext:
             "P_THRESHOLD": model_cfg["p_threshold"],
             "S_THRESHOLD": model_cfg["s_threshold"],
             "WLENGTH_SECONDS": model_cfg["wlength_seconds"],
+            "PHASE_NUM_WORKERS_CPU_MPS": phase_picking_cfg["num_workers_cpu_mps"],
+            "PHASE_SLURM_CPUS_DEFAULT": phase_picking_cfg["slurm_cpus_default"],
             "start_day": self.derived.start_day,
             "end_day": self.derived.end_day,
             "THR": self.derived.thr,
@@ -192,30 +213,48 @@ class RuntimeContext:
             "plot_map_title": plotting_cfg["map_title"],
             "h71_min_p": self.raw.hypoellipse["h71_min_p"],
             "h71_min_s": self.raw.hypoellipse["h71_min_s"],
+            "HYPOELLIPSE_DOCKER_IMAGE": self.raw.hypoellipse_check["docker_image"],
+            "HYPOELLIPSE_DOCKER_START_TIMEOUT_SECONDS": self.raw.hypoellipse_check["docker_start_timeout_seconds"],
             "DD_MAX_GAP": self.raw.dd["max_gap"],
             "DD_MAX_RMS": self.raw.dd["max_rms"],
             "DD_MAX_ERH": self.raw.dd["max_erh"],
             "DD_MAX_ERZ": self.raw.dd["max_erz"],
-            "MAX_DIST_KM_CC": script11_cfg["max_dist_km_cc"],
-            "CC_THRESHOLD_11": script11_cfg["cc_threshold"],
-            "WIN_BEFORE_CC": script11_cfg["win_before"],
-            "WIN_AFTER_CC": script11_cfg["win_after"],
-            "CC_MAX_LAG_11": script11_cfg["cc_max_lag"],
-            "FREQ_MIN_CC": script11_cfg["freq_min"],
-            "FREQ_MAX_CC": script11_cfg["freq_max"],
-            "CC_NETWORK": script11_cfg["network"],
-            "THRESHOLDS_MAP_12": self.raw.script12["thresholds_map"],
+            "MAX_DIST_KM_CC": cc_dd_cfg["max_dist_km_cc"],
+            "CC_THRESHOLD_11": cc_dd_cfg["cc_threshold"],
+            "WIN_BEFORE_CC": cc_dd_cfg["win_before"],
+            "WIN_AFTER_CC": cc_dd_cfg["win_after"],
+            "CC_MAX_LAG_11": cc_dd_cfg["cc_max_lag"],
+            "FREQ_MIN_CC": cc_dd_cfg["freq_min"],
+            "FREQ_MAX_CC": cc_dd_cfg["freq_max"],
+            "CC_NETWORK": cc_dd_cfg["network"],
+            "CC_WORKER_COUNT": cc_dd_cfg["worker_count"],
+            "CC_CHUNK_SIZE": cc_dd_cfg["chunk_size"],
+            "CC_P_CHANNEL": cc_dd_cfg["p_channel"],
+            "CC_S_CHANNEL": cc_dd_cfg["s_channel"],
+            "CC_MAX_ABS_DT_SECONDS": cc_dd_cfg["max_abs_dt_seconds"],
+            "THRESHOLDS_MAP_12": self.raw.threshold_analysis["thresholds_map"],
+            "THRESHOLD_ANALYSIS_DPI": self.raw.threshold_analysis["dpi"],
             "base_dir": str(self.paths.base_dir),
             "project_root": str(self.paths.project_root),
             "case_study_dir": str(self.paths.project_root),
+            "archive_dir": str(self.paths.archive_dir),
             "root_dir": str(self.paths.root_dir),
             "inventory_dir": str(self.paths.inventory_dir),
             "waveform_base": str(self.paths.waveform_base),
             "output_base": str(self.paths.output_base),
+            "threshold_dir": str(self.paths.threshold_dir),
+            "threshold_comparison_dir": str(self.paths.threshold_comparison_dir),
             "output_picks_dir": str(self.paths.output_picks_dir),
             "output_dir": str(self.paths.output_dir),
+            "gamma_dir": str(self.paths.gamma_dir),
             "h71_filtered_dir": str(self.paths.h71_filtered_dir),
+            "hypoellipse_dir": str(self.paths.hypoellipse_dir),
+            "hypoellipse_input_dir": str(self.paths.hypoellipse_input_dir),
+            "hypoellipse_output_dir": str(self.paths.hypoellipse_output_dir),
             "dd_dir": str(self.paths.dd_dir),
+            "hypodd_dir": str(self.paths.hypodd_dir),
+            "hypodd_input_dir": str(self.paths.hypodd_input_dir),
+            "hypodd_output_dir": str(self.paths.hypodd_output_dir),
             "download_log_path": str(self.paths.download_log_path),
             "station_file_name": self.paths.station_file_name,
             "log_file_path": str(self.paths.log_file_path),
@@ -228,6 +267,11 @@ class RuntimeContext:
             "dd_output_file": str(self.paths.dd_output_file),
             "dd_station_file": str(self.paths.dd_station_file),
             "dd_dtcc_file": str(self.paths.dd_dtcc_file),
+            "dd_dtct_file": str(self.paths.dd_dtct_file),
+            "hypodd_run_dir": str(self.paths.hypodd_run_dir),
+            "hypodd_ph2dt_input_path": str(self.paths.hypodd_ph2dt_input_path),
+            "hypodd_input_path": str(self.paths.hypodd_input_path),
+            "hypodd_reloc_path": str(self.paths.hypodd_reloc_path),
             "CSV_FILENAME_12": self.paths.csv_filename_12,
             "output_bar_path_12": str(self.paths.output_bar_path_12),
             "output_line_path_12": str(self.paths.output_line_path_12),
@@ -248,7 +292,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
         import yaml
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "PyYAML is required to read config.yaml. Activate the Conda environment "
+            "PyYAML is required to read the user configuration YAML. Activate the Conda environment "
             "or run `conda env update -f environment.yml`."
         ) from exc
 
@@ -266,13 +310,16 @@ def validate_config(raw: dict[str, Any]) -> None:
         "dates": ["starttime", "endtime", "year"],
         "stations": ["network", "channel", "stations_list", "fdsn_clients"],
         "model": ["neural_network", "model_type", "custom_model_path", "batch_size", "p_threshold", "s_threshold", "wlength_seconds"],
+        "phase_picking": ["num_workers_cpu_mps", "slurm_cpus_default"],
         "gamma": ["dims", "use_dbscan", "use_amplitude", "x_km", "y_km", "z_km", "velocity", "method", "dbscan_eps", "dbscan_min_samples", "eikonal", "filtering"],
         "analysis": ["log_filename"],
         "plotting": ["gmt_library_path", "gmt_grid_path", "region", "map_title"],
-        "hypoellipse": ["h71_min_p", "h71_min_s", "velocity_model_path", "parameter_file_path"],
+        "hypoellipse": ["h71_min_p", "h71_min_s"],
+        "hypoellipse_check": ["docker_image", "docker_start_timeout_seconds"],
         "dd": ["max_gap", "max_rms", "max_erh", "max_erz"],
-        "script11": ["max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network"],
-        "script12": ["thresholds_map"],
+        "hypodd": ["docker_image", "docker_start_timeout_seconds", "dimensions", "ph2dt", "relocation", "velocity_model"],
+        "cc_dd": ["max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "p_channel", "s_channel", "max_abs_dt_seconds"],
+        "threshold_analysis": ["dpi", "thresholds_map"],
     }
     missing = []
     for section, keys in required.items():
@@ -287,6 +334,10 @@ def validate_config(raw: dict[str, Any]) -> None:
         ("gamma.velocity", ["p", "s"]),
         ("gamma.eikonal", ["z", "p", "vp_vs_ratio", "h"]),
         ("gamma.filtering", ["min_picks_per_eq", "min_p_picks_per_eq", "min_s_picks_per_eq", "max_sigma11", "max_sigma22", "max_sigma12"]),
+        ("hypodd.dimensions", ["mode", "maxeve0", "maxlay", "maxcl"]),
+        ("hypodd.ph2dt", ["min_weight", "max_dist_km", "max_sep_km", "max_neighbors", "min_links", "min_observations", "max_observations"]),
+        ("hypodd.relocation", ["idat", "ipha", "max_dist_km", "obscc", "obsct", "min_pair_station_dist", "max_pair_station_dist", "max_gap", "istart", "isolve", "iaq", "cluster_id", "iteration_sets"]),
+        ("hypodd.velocity_model", ["top_km", "vp_km_s", "vp_vs_ratio"]),
     ]
     for dotted, keys in nested:
         section, child = dotted.split(".")
@@ -302,7 +353,7 @@ def validate_config(raw: dict[str, Any]) -> None:
         raise ValueError("Missing configuration keys: " + ", ".join(missing))
 
 
-def build_context(config_path: str | Path = "config.yaml") -> RuntimeContext:
+def build_context(config_path: str | Path = "user_configuration/config.yaml") -> RuntimeContext:
     config_path = Path(config_path)
     raw_dict = load_config(config_path)
     validate_config(raw_dict)
@@ -318,37 +369,60 @@ def build_context(config_path: str | Path = "config.yaml") -> RuntimeContext:
 
     base_dir = Path.cwd()
     project_root = Path(raw.case_study["personal_folder"]) if raw.case_study["personal_folder"] else base_dir / raw.case_study["name"]
+    archive_dir = project_root / "archive"
     output_base = project_root / "output"
-    output_dir = output_base / f"output_catalog_{p_threshold}"
-    h71_filtered_dir = output_dir / "filtered_data"
-    dd_dir = output_dir / "refined_localizations"
+    threshold_dir = output_base / f"threshold_p{p_threshold}_s{s_threshold}"
+    threshold_comparison_dir = output_base / "threshold_comparison"
+    output_dir = threshold_dir / f"output_catalog_{p_threshold}" / "gamma"
+    h71_filtered_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypoellipse" / "input"
+    hypoellipse_dir = h71_filtered_dir.parent
+    hypoellipse_output_dir = hypoellipse_dir / "output"
+    dd_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypodd" / "input"
+    hypodd_dir = dd_dir.parent
+    hypodd_output_dir = hypodd_dir / "output"
+    hypodd_run_dir = hypodd_dir / "input&output"
     station_file_name = "stations.csv"
 
     paths = Paths(
         base_dir=base_dir,
         project_root=project_root,
-        root_dir=project_root / "waveforms",
-        inventory_dir=project_root / "inventory",
-        waveform_base=project_root / "waveforms" / str(raw.dates["year"]),
+        archive_dir=archive_dir,
+        root_dir=archive_dir / "waveforms",
+        inventory_dir=archive_dir / "inventory",
+        waveform_base=archive_dir / "waveforms" / str(raw.dates["year"]),
         output_base=output_base,
-        output_picks_dir=output_base / f"output_picks_{p_threshold}",
+        threshold_dir=threshold_dir,
+        threshold_comparison_dir=threshold_comparison_dir,
+        output_picks_dir=threshold_dir / f"output_picks_{p_threshold}",
         output_dir=output_dir,
+        gamma_dir=output_dir,
         h71_filtered_dir=h71_filtered_dir,
+        hypoellipse_dir=hypoellipse_dir,
+        hypoellipse_input_dir=h71_filtered_dir,
+        hypoellipse_output_dir=hypoellipse_output_dir,
         dd_dir=dd_dir,
-        download_log_path=project_root / "download_log.txt",
-        log_file_path=output_base / "phase_picking_log.txt",
-        location_1d_out_path=dd_dir / "location-1D.out",
-        location_1d_quality_path=dd_dir / f"location-1D_{thr}.quality",
-        filtered_locations_csv_path=dd_dir / f"filtered_locations_{thr}.csv",
-        filtered_phases_csv_path=dd_dir / f"filtered_phases_{thr}.csv",
+        hypodd_dir=hypodd_dir,
+        hypodd_input_dir=dd_dir,
+        hypodd_output_dir=hypodd_output_dir,
+        download_log_path=archive_dir / "download_log.txt",
+        log_file_path=threshold_dir / f"output_picks_{p_threshold}" / "phase_picking_log.txt",
+        location_1d_out_path=hypoellipse_output_dir / "location-1D.out",
+        location_1d_quality_path=hypoellipse_output_dir / f"location-1D_{thr}.quality",
+        filtered_locations_csv_path=hypoellipse_output_dir / f"filtered_locations_{thr}.csv",
+        filtered_phases_csv_path=hypoellipse_output_dir / f"filtered_phases_{thr}.csv",
         phs_file_path=h71_filtered_dir / "out_conv.phs",
-        stations_csv_path=project_root / station_file_name,
+        stations_csv_path=archive_dir / station_file_name,
         dd_output_file=dd_dir / f"travel_{thr}.dat",
         dd_station_file=dd_dir / f"station_{thr}.dat",
         dd_dtcc_file=dd_dir / "dt.cc",
+        dd_dtct_file=hypodd_run_dir / "dt.ct",
+        hypodd_run_dir=hypodd_run_dir,
+        hypodd_ph2dt_input_path=dd_dir / "ph2dt.inp",
+        hypodd_input_path=dd_dir / "hypoDD.inp",
+        hypodd_reloc_path=hypodd_output_dir / "hypoDD.reloc",
         csv_filename_12=f"seismic_catalog_with_latlon_{raw.dates['year']}_{starttime.julday:03d}_{endtime.julday:03d}.csv",
-        output_bar_path_12=output_base / "grouped_bar_charts.pdf",
-        output_line_path_12=output_base / "line_charts_vs_THR.pdf",
+        output_bar_path_12=threshold_comparison_dir / "grouped_bar_charts.pdf",
+        output_line_path_12=threshold_comparison_dir / "line_charts_vs_THR.pdf",
         station_file_name=station_file_name,
     )
 
@@ -366,9 +440,17 @@ def ensure_initial_directories(ctx: RuntimeContext) -> None:
     """Create directories expected before external/manual workflow steps."""
     for path in (
         ctx.paths.project_root,
+        ctx.paths.archive_dir,
         ctx.paths.output_base,
-        ctx.paths.output_dir,
-        ctx.paths.dd_dir,
+        ctx.paths.threshold_comparison_dir,
+        ctx.paths.threshold_dir,
+        ctx.paths.output_picks_dir,
+        ctx.paths.gamma_dir,
+        ctx.paths.hypoellipse_input_dir,
+        ctx.paths.hypoellipse_output_dir,
+        ctx.paths.hypodd_input_dir,
+        ctx.paths.hypodd_run_dir,
+        ctx.paths.hypodd_output_dir,
     ):
         path.mkdir(parents=True, exist_ok=True)
 

@@ -12,7 +12,8 @@ Usage:
     python main.py gamma-analysis
     python main.py plot-catalog
     python main.py threshold-analysis
-    python main.py cc-dd-test
+    python main.py cc-dd
+    python main.py hypodd
     python -m seimlai.main
 """
 
@@ -47,16 +48,18 @@ STEPS = [
     Step("06", "hypoellipse-check", "Absolute location (HypoEllipse Docker run)", "seimlai.hypoellipse_check"),
     Step("07", "locations-filtering", "Locations filtering", "seimlai.location_filtering"),
     Step("08", "relative-relocation", "Relative relocation (HypoDD input generation)", "seimlai.relative_relocation"),
+    Step("09", "cc-dd", "Cross-correlation differential-time generation", "seimlai.cc_dd"),
+    Step("10", "hypodd", "Relative relocation (HypoDD Docker run)", "seimlai.hypodd"),
 ]
 
 OPTIONAL_STEPS = {
     "gamma-analysis": Step("gamma-analysis", "gamma-analysis", "Analyse GaMMA output", "seimlai.analysis", optional=True),
     "plot-catalog": Step("plot-catalog", "plot-catalog", "Plot catalog (PyGMT)", "seimlai.plotting", optional=True),
     "threshold-analysis": Step("threshold-analysis", "threshold-analysis", "Analyse threshold results", "seimlai.threshold_analysis", optional=True),
-    "cc-dd-test": Step("cc-dd-test", "cc-dd-test", "Cross-correlation DD test", "seimlai.cc_dd_test", optional=True),
 }
 
 STEP_IDS = [step.id for step in STEPS]
+STEP_COMMANDS = {step.command: step.id for step in STEPS}
 
 
 def continue_steps():
@@ -90,32 +93,36 @@ def parse_args():
     epilog = """
 COMMANDS:
   (none)              Run the full workflow.
-  continue            Continue from the HypoEllipse output check (steps 06-08).
-  01 ... 08           Run one workflow stage by ID.
+  continue            Continue from the HypoEllipse output check (steps 06-10).
+  01 ... 10           Run one workflow stage by ID.
+  download ... hypodd Run one workflow stage by command name.
   gamma-analysis      Run optional GaMMA output analysis.
   plot-catalog        Run optional catalog plotting.
   threshold-analysis  Run optional threshold analysis.
-  cc-dd-test          Run optional experimental cross-correlation DD test.
 
 STEP IDs:
-  01  Download data
-  02  Data cleaning
-  03  Phase picking (CNN)
-  04  Phase association and raw catalog building (GaMMA)
-  05  Data preparation for absolute location
-  06  Absolute location (HypoEllipse Docker run)
-  07  Locations filtering
-  08  Relative relocation (HypoDD input generation)
+  01  download                 Download data
+  02  data-cleaning            Data cleaning
+  03  phase-picking            Phase picking (CNN)
+  04  association              Phase association and raw catalog building (GaMMA)
+  05  absolute-location-prep   Data preparation for absolute location
+  06  hypoellipse-check        Absolute location (HypoEllipse Docker run)
+  07  locations-filtering      Locations filtering
+  08  relative-relocation      Relative relocation (HypoDD input generation)
+  09  cc-dd                    Cross-correlation differential-time generation
+  10  hypodd                   Relative relocation (HypoDD Docker run)
 
 EXAMPLES:
   python main.py
   python main.py continue
   python main.py 03
+  python main.py cc-dd
+  python main.py hypodd
   python main.py --from 03
-  python main.py --only 06 07
+  python main.py --only 08 09 10
   python main.py gamma-analysis
-  python main.py --config config.yaml --only 02
-  python -m seimlai.main --config config.yaml --only 02
+  python main.py --config user_configuration/config.yaml --only 02
+  python -m seimlai.main --config user_configuration/config.yaml --only 02
 """
     parser = argparse.ArgumentParser(
         description="Seismic workflow runner.",
@@ -126,12 +133,12 @@ EXAMPLES:
         "command",
         nargs="?",
         default=None,
-        choices=["continue", *STEP_IDS, *OPTIONAL_STEPS.keys()],
+        choices=["continue", *STEP_IDS, *STEP_COMMANDS.keys(), *OPTIONAL_STEPS.keys()],
         help="Optional command or stage ID to run instead of the full workflow.",
     )
     parser.add_argument(
         "--config",
-        default="config.yaml",
+        default="user_configuration/config.yaml",
         help="Path to the YAML configuration file.",
     )
     group = parser.add_mutually_exclusive_group()
@@ -219,11 +226,11 @@ def main():
         sys.exit(1)
     ensure_initial_directories(ctx)
 
-    if args.command in STEP_IDS:
+    if args.command in STEP_IDS or args.command in STEP_COMMANDS:
         if args.from_step or args.only_steps:
-            print("[ERROR] --from and --only cannot be used when running a single stage ID command.")
+            print("[ERROR] --from and --only cannot be used when running a single stage command.")
             sys.exit(1)
-        run_single_stage(ctx, args.command)
+        run_single_stage(ctx, STEP_COMMANDS.get(args.command, args.command))
         return
 
     if args.command in OPTIONAL_STEPS:
@@ -237,7 +244,7 @@ def main():
         run_pipeline(
             ctx,
             continue_steps(),
-            "continue (steps 06-08)",
+            "continue (steps 06-10)",
             from_step=args.from_step,
             only_steps=args.only_steps,
         )

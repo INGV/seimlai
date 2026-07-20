@@ -10,7 +10,7 @@ BASE_DIR = None
 THRESHOLDS_MAP = None
 
 CSV_FILENAME = None
-DPI = 300
+DPI = None
 output_bar_path = None
 output_line_path = None
 
@@ -21,6 +21,7 @@ def _apply_context(ctx):
         "BASE_DIR": output_base,
         "THRESHOLDS_MAP": THRESHOLDS_MAP_12,
         "CSV_FILENAME": CSV_FILENAME_12,
+        "DPI": THRESHOLD_ANALYSIS_DPI,
         "output_bar_path": output_bar_path_12,
         "output_line_path": output_line_path_12,
     })
@@ -31,8 +32,23 @@ def parse_folder_data(folder_suffix, thr_value):
     """
     Legge il log per le statistiche delle onde e conta gli eventi dal file CSV.
     """
-    folder_name = f"output_catalog_{folder_suffix}"
-    folder_path = os.path.join(BASE_DIR, folder_name)
+    try:
+        p_code, s_code = folder_suffix.split("-", 1)
+        p_threshold = int(p_code) / 10
+        s_threshold = int(s_code) / 10
+    except (AttributeError, ValueError):
+        print(f"❌ Formato threshold non valido: {folder_suffix}")
+        return None
+
+    p_label = str(p_threshold)
+    s_label = str(s_threshold)
+    folder_name = f"threshold_p{p_label}_s{s_label}"
+    folder_path = os.path.join(
+        BASE_DIR,
+        folder_name,
+        f"output_catalog_{p_label}",
+        "gamma",
+    )
     log_path = os.path.join(folder_path, 'analisi_picking.log')
     csv_path = os.path.join(folder_path, CSV_FILENAME)
     
@@ -88,7 +104,7 @@ def run(ctx):
         print("\n⚠️  Nessun dato trovato!")
         print("    Questo script confronta i risultati di più run con threshold diversi.")
         print("    Per ogni threshold (es. 01-01, 02-02, ...) deve esistere la cartella:")
-        print(f"      {BASE_DIR}/output_catalog_XX-XX/")
+        print(f"      {BASE_DIR}/threshold_pX_sY/output_catalog_X/gamma/")
         print("    contenente il file 'analisi_picking.log' (generato dal comando gamma-analysis).")
         print("\n    Se hai eseguito la pipeline una sola volta, questo script non ha dati da confrontare.")
         return
@@ -166,7 +182,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_threshold_analysis = run

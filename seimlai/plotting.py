@@ -19,7 +19,7 @@ def run(ctx):
 
     # --- Derived paths from runtime context ---
     catalog_file = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
-    stations_file = os.path.join(case_study_dir, "stations.csv")
+    stations_file = stations_csv_path
 
     if not os.path.exists(catalog_file):
         print(f"Errore: Il file {catalog_file} non esiste. Esegui prima lo script di elaborazione.")
@@ -103,7 +103,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_plotting = run
