@@ -336,7 +336,7 @@ def dec_to_degmin(dec_deg, is_lat=True):
 
 
 def convert_station_file_for_hypoellipse():
-    df = pd.read_csv(os.path.join(case_study_dir, station_file_name))
+    df = pd.read_csv(stations_csv_path)
 
     os.makedirs(h71_filtered_dir, exist_ok=True)
 
@@ -413,7 +413,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_absolute_location_prep = run

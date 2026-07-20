@@ -495,7 +495,7 @@ def run(ctx):
 def cli():
     from seimlai.context import build_context
 
-    ctx = build_context("config.yaml")
+    ctx = build_context("user_configuration/config.yaml")
     _apply_context(ctx)
     if len(sys.argv) >= 3:
         main(sys.argv[1], sys.argv[2])

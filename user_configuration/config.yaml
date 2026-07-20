@@ -1,0 +1,185 @@
+case_study:
+  name: layout_test
+  personal_folder: null
+  download_data: true
+
+geography:
+  minlatitude: 42.25
+  maxlatitude: 43.12
+  minlongitude: 11.75
+  maxlongitude: 14.00
+
+dates:
+  starttime: "2016-10-30"
+  endtime: "2016-10-30"
+  year: 2016
+
+stations:
+  network: "*"
+  channel: "BH?,HH?,EH?"
+  stations_list: "*"
+  fdsn_clients:
+    - IRIS
+    - INGV
+
+# 03_phase_picking.py - neural model settings
+model:
+  neural_network: PhaseNet
+  model_type: original
+  custom_model_path: null
+  batch_size: 256
+  p_threshold: 0.8
+  s_threshold: 0.8
+  wlength_seconds: 900
+
+# 03_phase_picking.py - runtime settings
+phase_picking:
+  num_workers_cpu_mps: 2
+  slurm_cpus_default: 4
+
+# 04_association.py
+gamma:
+  dims:
+    - x(km)
+    - y(km)
+    - z(km)
+  use_dbscan: true
+  use_amplitude: true
+  x_km:
+    - 230
+    - 620
+  y_km:
+    - 4650
+    - 4800
+  z_km:
+    - 0
+    - 60
+  velocity:
+    p: 7.0
+    s: 4.0
+  method: BGMM
+  dbscan_eps: 25
+  dbscan_min_samples: 3
+  eikonal:
+    z:
+      - 0.0
+      - 5.5
+      - 16.0
+      - 32.0
+    p:
+      - 5.5
+      - 5.5
+      - 6.7
+      - 7.8
+    vp_vs_ratio: 1.73
+    h: 1.0
+  filtering:
+    min_picks_per_eq: 6
+    min_p_picks_per_eq: 4
+    min_s_picks_per_eq: 3
+    max_sigma11: 1.5
+    max_sigma22: 1.0
+    max_sigma12: 1.0
+
+# gamma-analysis optional command
+analysis:
+  log_filename: analisi_picking.log
+
+# plot-catalog optional command
+plotting:
+  gmt_library_path: ""
+  gmt_grid_path: "@earth_relief_15s"
+  region:
+    - 12.5
+    - 14.00
+    - 42.00
+    - 43.50
+  map_title: Central Italy - Seismicity
+
+# 05_absolute_location_prep.py
+hypoellipse:
+  h71_min_p: 4
+  h71_min_s: 2
+
+# 06_hypoellipse_check.py
+hypoellipse_check:
+  docker_image: ingv/hypoellipse
+  docker_start_timeout_seconds: 90
+
+# 07_location_filtering.py and 08_relative_relocation.py
+dd:
+  max_gap: 180.0
+  max_rms: 0.4
+  max_erh: 0.8
+  max_erz: 0.8
+
+# 10_hypodd.py
+hypodd:
+  docker_image: hypodd:2.1b
+  docker_start_timeout_seconds: 90
+  dimensions:
+    mode: auto
+    maxeve0: 2
+    maxlay: 50
+    maxcl: 200
+  ph2dt:
+    min_weight: 0.0
+    max_dist_km: 120.0
+    max_sep_km: 10.0
+    max_neighbors: 10
+    min_links: 8
+    min_observations: 1
+    max_observations: 100
+  relocation:
+    idat: 3
+    ipha: 3
+    max_dist_km: 120.0
+    obscc: 0
+    obsct: 8
+    min_pair_station_dist: -999
+    max_pair_station_dist: -999
+    max_gap: -999
+    istart: 2
+    isolve: 2
+    iaq: 1
+    cluster_id: 0
+    iteration_sets:
+      - [5, 0.01, 0.01, -999, -999, 1.00, 0.50, -999, -999, 20]
+      - [5, 0.01, 0.01, -999, -999, 1.00, 0.50, 6, 4, 20]
+      - [5, 1.00, 0.50, -999, 2, 0.01, 0.005, 6, 4, 20]
+      - [5, 1.00, 0.50, 6, 2, 0.01, 0.005, 6, 4, 20]
+      - [5, 1.00, 0.50, 6, 0.5, 0.01, 0.005, 6, 4, 20]
+  velocity_model:
+    top_km: [0.0, 4.0, 10.0, 25.0, 30.0]
+    vp_km_s: [5.0, 6.2, 6.3, 7.0, 8.0]
+    vp_vs_ratio: 1.86
+
+# 09_cc_dd.py
+cc_dd:
+  max_dist_km_cc: 3.0
+  cc_threshold: 0.7
+  win_before: 0.1
+  win_after: 0.5
+  cc_max_lag: 0.3
+  freq_min: 2.0
+  freq_max: 15.0
+  network: 3A
+  worker_count: null
+  chunk_size: null
+  p_channel: EHZ
+  s_channel: EHE
+  max_abs_dt_seconds: 10.0
+
+# threshold-analysis optional command
+threshold_analysis:
+  dpi: 300
+  thresholds_map:
+    01-01: 0.1
+    02-02: 0.2
+    03-03: 0.3
+    04-04: 0.4
+    05-05: 0.5
+    06-06: 0.6
+    07-07: 0.7
+    08-08: 0.8
+    09-09: 0.9

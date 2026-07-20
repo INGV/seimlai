@@ -38,6 +38,8 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
             
         max_amp = 0.0
         for tr in st_strict:
+            if tr.stats.npts == 0:
+                continue
             tr_max = np.max(np.abs(tr.data))
             if tr_max > max_amp:
                 max_amp = tr_max
@@ -47,6 +49,115 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
         err_msg = f"    Error calculating amplitude for pick at {pick_time}: {e}"
         logs.append(err_msg)
         return np.nan
+
+
+def preprocess_stream_for_picking(st, logs, fmin=0.5, fmax=30.0, min_duration_sec=30.0):
+    """
+    Preprocessing usato solo per il picking PhaseNet/EQTransformer.
+    Evita fill_value=0: interpola solo gap piccoli, poi spezza i gap rimasti.
+    """
+    if len(st) == 0:
+        return Stream()
+
+    merged = Stream()
+
+    for tid in sorted(set(tr.id for tr in st)):
+        sub = st.select(id=tid).copy()
+        if len(sub) == 0:
+            continue
+
+        try:
+            sr = sub[0].stats.sampling_rate
+            max_samples = int(0.1 * sr)
+            sub.merge(method=1, fill_value=None, interpolation_samples=max_samples)
+        except Exception as e:
+            logs.append(f"    WARNING: merge failed for {tid}: {e}")
+
+        merged += sub
+
+    try:
+        merged = merged.split()
+    except Exception as e:
+        logs.append(f"    WARNING: split failed after merge: {e}")
+
+    merged.traces = [
+        tr for tr in merged.traces
+        if tr.stats.sampling_rate / 2.0 > fmax
+    ]
+
+    if len(merged) == 0:
+        logs.append("    Skipped after preprocessing: no traces with Nyquist > fmax.")
+        return merged
+
+    merged.traces = [
+        tr for tr in merged.traces
+        if tr.stats.npts / tr.stats.sampling_rate >= min_duration_sec
+    ]
+
+    if len(merged) == 0:
+        logs.append("    Skipped after preprocessing: all traces shorter than 30 s.")
+        return merged
+
+    try:
+        merged.detrend("demean")
+        merged.detrend("linear")
+        merged.taper(max_percentage=0.05, type="cosine")
+        merged.filter("bandpass", freqmin=fmin, freqmax=fmax, corners=4, zerophase=True)
+    except Exception as e:
+        logs.append(f"    ERROR during detrend/taper/filter for picking: {e}")
+        return Stream()
+
+    return merged
+
+
+def preprocess_stream_for_amplitude(st, logs):
+    """
+    Prepara lo stream usato per il calcolo dell'ampiezza senza filtrarlo come il picking.
+    """
+    if len(st) == 0:
+        return Stream()
+
+    merged = Stream()
+
+    for tid in sorted(set(tr.id for tr in st)):
+        sub = st.select(id=tid).copy()
+        if len(sub) == 0:
+            continue
+
+        try:
+            sr = sub[0].stats.sampling_rate
+            max_samples = int(0.1 * sr)
+            sub.merge(method=1, fill_value=None, interpolation_samples=max_samples)
+        except Exception as e:
+            logs.append(f"    WARNING: amplitude merge failed for {tid}: {e}")
+
+        merged += sub
+
+    try:
+        merged = merged.split()
+    except Exception as e:
+        logs.append(f"    WARNING: amplitude split failed after merge: {e}")
+
+    if len(merged) == 0:
+        return merged
+
+    try:
+        merged.detrend("demean")
+        merged.detrend("linear")
+        merged.taper(max_percentage=0.05, type="cosine")
+    except Exception as e:
+        logs.append(f"    WARNING: amplitude detrend/taper failed: {e}")
+
+    return merged
+
+
+def has_three_components(st):
+    components = set()
+    for tr in st:
+        if tr.stats.channel:
+            components.add(tr.stats.channel[-1])
+
+    return {"Z", "N", "E"}.issubset(components) or {"Z", "1", "2"}.issubset(components)
 
 
 # =====================================================================
@@ -75,6 +186,10 @@ def process_station_worker(args):
     logs.append(f"[{net}.{stat}] Inizio elaborazione...")
     
     stream = Stream()
+    stream_pick = Stream()
+    stream_amp = Stream()
+    classified = None
+    outputs = []
 
     # === SELEZIONE GERARCHICA CANALI (HH > EH > BH) ===
     all_subdirs = [d for d in os.listdir(stat_path) if d.endswith(".D")]
@@ -125,32 +240,44 @@ def process_station_worker(args):
     # =========================================================
     try:
         stream.sort()
-        # Misuriamo la lunghezza totale dei dati
-        t_start = stream[0].stats.starttime
-        t_end = stream[-1].stats.endtime
+        # Misuriamo la lunghezza totale dei dati senza riempire i gap con zeri.
+        t_start = min(tr.stats.starttime for tr in stream)
+        t_end = max(tr.stats.endtime for tr in stream)
         durata_ore = (t_end - t_start) / 3600.0
 
         # Mettiamo un limite di "sopravvivenza" largo (48 ore) per gestire i file enormi a cavallo di mezzanotte
-        if durata_ore <= 48.0:
-            stream.merge(method=1, fill_value=0)
-        else:
+        if durata_ore > 48.0:
             logs.append(f"[{net}.{stat}] SKIP: Dati corrotti (Durata: {durata_ore:.1f}h). Rischio OOM!")
             return pd.DataFrame(), logs
             
     except Exception as e:
-        logs.append(f"[{net}.{stat}] Errore durante il controllo/merge: {e}")
+        logs.append(f"[{net}.{stat}] Errore durante il controllo durata: {e}")
         return pd.DataFrame(), logs
     # =========================================================
 
-    # Se dopo il merge non abbiamo le 3 componenti sane, saltiamo la stazione
-    if len(stream) < 3:
-        logs.append(f"[{net}.{stat}] Skipped: Non ha 3 componenti.")
+    stream_pick = preprocess_stream_for_picking(
+        stream,
+        logs,
+        fmin=0.5,
+        fmax=30.0,
+        min_duration_sec=30.0,
+    )
+
+    if len(stream_pick) == 0:
+        logs.append(f"[{net}.{stat}] Skipped: stream_pick vuoto dopo preprocessing.")
         return pd.DataFrame(), logs
+
+    if not has_three_components(stream_pick):
+        logs.append(f"[{net}.{stat}] Skipped: non ha 3 componenti Z/N/E o Z/1/2 dopo preprocessing.")
+        return pd.DataFrame(), logs
+
     try:
         # === RIMOZIONE RISPOSTA STRUMENTALE ===
         # === RIMOZIONE RISPOSTA STRUMENTALE ===
-        stream_vel = stream.copy()
-        stream_vel.detrend("demean")
+        stream_amp = preprocess_stream_for_amplitude(stream, logs)
+
+        if len(stream_amp) == 0:
+            logs.append(f"[{net}.{stat}] Warning: stream_amp vuoto. Ampiezze saranno NaN.")
 
         # =========================================================
         # ✨ 3. RICERCA ESATTA DELL'XML CON STAMPA LIVE
@@ -159,20 +286,20 @@ def process_station_worker(args):
         cartella_xml = os.path.dirname(inv_path)
         nome_esatto_xml = f"{net}.{stat}.xml" # Es: 3A.MZ09.xml
 
-        if os.path.exists(cartella_xml):
+        if len(stream_amp) > 0 and os.path.exists(cartella_xml):
             for f in os.listdir(cartella_xml):
                 # Il nome del file deve essere ESATTAMENTE quello che cerchiamo
                 if f == nome_esatto_xml:
                     xml_reale = os.path.join(cartella_xml, f)
                     break
 
-        if xml_reale is not None:
+        if len(stream_amp) > 0 and xml_reale is not None:
             from obspy import read_inventory
             inv = read_inventory(xml_reale)
 
             # --- SOLUZIONE GENERALIZZATA ---
             original_channels = []
-            for tr in stream_vel:
+            for tr in stream_amp:
                 original_channels.append(tr.stats.channel)
                 comp = tr.stats.channel[-1]
 
@@ -184,11 +311,11 @@ def process_station_worker(args):
                         tr.stats.channel = fallback[0]
 
             pre_filt = [0.1, 0.5, 30.0, 40.0]
+            nome_file_trovato = os.path.basename(xml_reale)
             try:
-                stream_vel.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt, water_level=60)
+                stream_amp.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt, water_level=60)
 
                 # STAMPA LIVE: SUCCESSO!
-                nome_file_trovato = os.path.basename(xml_reale)
                 print(f"[XML] {net}.{stat} -> Trovato ({nome_file_trovato}) | Convertito in VEL (m/s)", flush=True)
 
             except Exception as e:
@@ -196,23 +323,26 @@ def process_station_worker(args):
                 # STAMPA LIVE: ERRORE MATEMATICO (Es. XML corrotto all'interno)
                 print(f"[XML] {net}.{stat} -> Trovato ({nome_file_trovato}), ma Errore Matematico | Mantenuto in Counts", flush=True)
 
-            for i, tr in enumerate(stream_vel):
+            for i, tr in enumerate(stream_amp):
                 tr.stats.channel = original_channels[i]
 
-        else:
+        elif len(stream_amp) > 0:
             logs.append(f"[{net}.{stat}] Warning: XML {nome_esatto_xml} non trovato in {cartella_xml}. Ampiezza in Counts.")
             # STAMPA LIVE: FILE MANCANTE
             print(f" [XML] {net}.{stat} -> {nome_esatto_xml} NON TROVATO | Mantenuto in Counts", flush=True)
 
         # === INFERENZA RETE NEURALE ===
         # === INFERENZA RETE NEURALE ===
-        classified = model.classify(stream, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
+        classified = model.classify(stream_pick, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
         outputs = classified.picks
         
         # === ESTRAZIONE AMPIEZZE ===
         # === ESTRAZIONE AMPIEZZE ===
         for p in outputs:
-            amp_val = get_peak_amplitude(p.peak_time.datetime, stream_vel, logs)
+            if len(stream_amp) > 0:
+                amp_val = get_peak_amplitude(p.peak_time.datetime, stream_amp, logs)
+            else:
+                amp_val = np.nan
             pick_df_list.append({
                 "station": stat,
                 "id": p.trace_id,
@@ -228,8 +358,8 @@ def process_station_worker(args):
         logs.append(f"[{net}.{stat}] Errore fatale su {stat}: {e}")
 
     # === PULIZIA MEMORIA RAM ===
-    del stream, stream_vel
-    if 'classified' in locals(): del classified, outputs
+    del stream, stream_pick, stream_amp
+    if classified is not None: del classified, outputs
     import gc
     gc.collect()
 
@@ -239,6 +369,23 @@ def process_station_worker(args):
 # =====================================================================
 # --- 3. MAIN SCRIPT (Il "Direttore d'orchestra") ---
 # =====================================================================
+def _terminate_executor_workers(executor):
+    processes = getattr(executor, "_processes", None)
+    if not processes:
+        return
+
+    for process in list(processes.values()):
+        if process.is_alive():
+            process.terminate()
+
+    for process in list(processes.values()):
+        process.join(timeout=5)
+
+    for process in list(processes.values()):
+        if process.is_alive():
+            process.kill()
+
+
 def execute_phase_picking(ctx):
     # 1. OBBLIGATORIO: Prepariamo il multiprocessing PRIMA di attivare la GPU
     try:
@@ -259,10 +406,10 @@ def execute_phase_picking(ctx):
 
     # 3. LETTURA RISORSE DI CALCOLO
     if device.type == "mps" or device.type == "cpu":
-        NUM_WORKERS = 2  # Freno a mano per test su Mac
+        NUM_WORKERS = PHASE_NUM_WORKERS_CPU_MPS
     else:
         # Sul Cluster, legge dinamicamente i core che hai chiesto con #SBATCH
-        slurm_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', 4))
+        slurm_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', PHASE_SLURM_CPUS_DEFAULT))
         NUM_WORKERS = slurm_cpus
 
     print(f"Avvio elaborazione parallela con {NUM_WORKERS} WORKERS!", flush=True)
@@ -295,8 +442,12 @@ def execute_phase_picking(ctx):
 
         # Esecuzione in parallelo
         all_daily_picks = []
-        with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
-            futures = {executor.submit(process_station_worker, task): task for task in tasks}
+        executor = ProcessPoolExecutor(max_workers=NUM_WORKERS)
+        futures = {}
+        interrupted = False
+        try:
+            for task in tasks:
+                futures[executor.submit(process_station_worker, task)] = task
         
             # Man mano che i worker finiscono, si raccolgono i risultati
             for future in as_completed(futures):
@@ -308,6 +459,20 @@ def execute_phase_picking(ctx):
             
                 if not df_station.empty:
                     all_daily_picks.append(df_station)
+        except KeyboardInterrupt:
+            interrupted = True
+            print("\nInterruzione richiesta: arresto dei worker in corso...", flush=True)
+            log_file.write("\nInterrupted by user. Stopping worker processes...\n")
+            log_file.flush()
+            for future in futures:
+                future.cancel()
+            _terminate_executor_workers(executor)
+            executor.shutdown(wait=False, cancel_futures=True)
+            log_file.close()
+            raise SystemExit(130)
+        finally:
+            if not interrupted:
+                executor.shutdown(wait=True)
 
         # Salvataggio unico a fine giornata nel CSV
         if all_daily_picks:
@@ -462,6 +627,7 @@ def analyze_data_by_threshold(ctx):
     _apply_context(ctx)
 
     BASE_DIRECTORY = output_base
+    COMPARISON_DIRECTORY = threshold_comparison_dir
     FILE_NAME = f"{start_day}_{end_day}_{year}_picks_sort.csv"
     LOG_FILE = "analysis_log.txt"
     SINGLE_PDF_FILE = "combined_analysis_report.pdf"
@@ -470,7 +636,8 @@ def analyze_data_by_threshold(ctx):
         print(f"ERROR: The defined BASE_DIRECTORY '{BASE_DIRECTORY}' does not exist.")
         return
 
-    log_path = os.path.join(BASE_DIRECTORY, LOG_FILE)
+    os.makedirs(COMPARISON_DIRECTORY, exist_ok=True)
+    log_path = os.path.join(COMPARISON_DIRECTORY, LOG_FILE)
     plot_data = []
     found_any_data = False
 
@@ -538,11 +705,11 @@ def analyze_data_by_threshold(ctx):
             )
             log_file.write(log_entry)
         
-    generate_combined_plots(df_plot, BASE_DIRECTORY)
+    generate_combined_plots(df_plot, COMPARISON_DIRECTORY)
     
     print(f"\nAnalysis complete!")
     print(f"Single log file saved (SORTED) to: {log_path}")
-    print(f"Single combined PDF saved to: {os.path.join(BASE_DIRECTORY, SINGLE_PDF_FILE)}")
+    print(f"Single combined PDF saved to: {os.path.join(COMPARISON_DIRECTORY, SINGLE_PDF_FILE)}")
 
 
 def run(ctx):
@@ -554,7 +721,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_phase_picking = run
