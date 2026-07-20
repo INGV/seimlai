@@ -129,7 +129,7 @@ def run(ctx):
     _apply_context(ctx)
 
     if PERSONAL_FOLDER is not None and not DOWNLOAD_DATA:
-        print(f"\n[SKIP] PERSONAL_FOLDER is set but DOWNLOAD_DATA is False in config.yaml.")
+        print(f"\n[SKIP] PERSONAL_FOLDER is set but DOWNLOAD_DATA is False in user_configuration/config.yaml.")
         print("      Skipping download (Step 01). Set download_data = true to download to personal_folder.")
         return
 
@@ -248,7 +248,7 @@ def run(ctx):
 
     print(base_dir)
     # === Save station metadata to CSV ===
-    csv_path = os.path.join(case_study_dir, "stations.csv")
+    csv_path = stations_csv_path
     if station_metadata:
         fieldnames = list(station_metadata[0].keys())
         with open(csv_path, "w", newline="") as f:
@@ -320,7 +320,7 @@ def run(ctx):
             plt.legend()
             plt.grid()
             plt.tight_layout()
-            plot_path = os.path.join(case_study_dir, f"waveform_plot_{sta}.pdf")
+            plot_path = os.path.join(archive_dir, f"waveform_plot_{sta}.pdf")
             plt.savefig(plot_path, format='pdf', dpi=300)
             log(f"Plot saved to: {plot_path}")
             # plt.show() # Decommenta se sei in Spyder/Jupyter interattivo
@@ -338,7 +338,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_download = run

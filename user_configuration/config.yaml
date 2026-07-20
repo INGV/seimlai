@@ -1,5 +1,5 @@
 case_study:
-  name: Amatrice_catalog_test
+  name: layout_test
   personal_folder: null
   download_data: true
 
@@ -22,6 +22,7 @@ stations:
     - IRIS
     - INGV
 
+# 03_phase_picking.py - neural model settings
 model:
   neural_network: PhaseNet
   model_type: original
@@ -31,6 +32,12 @@ model:
   s_threshold: 0.8
   wlength_seconds: 900
 
+# 03_phase_picking.py - runtime settings
+phase_picking:
+  num_workers_cpu_mps: 2
+  slurm_cpus_default: 4
+
+# 04_association.py
 gamma:
   dims:
     - x(km)
@@ -74,9 +81,11 @@ gamma:
     max_sigma22: 1.0
     max_sigma12: 1.0
 
+# gamma-analysis optional command
 analysis:
   log_filename: analisi_picking.log
 
+# plot-catalog optional command
 plotting:
   gmt_library_path: ""
   gmt_grid_path: "@earth_relief_15s"
@@ -87,19 +96,66 @@ plotting:
     - 43.50
   map_title: Central Italy - Seismicity
 
+# 05_absolute_location_prep.py
 hypoellipse:
   h71_min_p: 4
   h71_min_s: 2
-  velocity_model_path: hypoellipse_inputs/grad.mod
-  parameter_file_path: hypoellipse_inputs/improved.cfg
 
+# 06_hypoellipse_check.py
+hypoellipse_check:
+  docker_image: ingv/hypoellipse
+  docker_start_timeout_seconds: 90
+
+# 07_location_filtering.py and 08_relative_relocation.py
 dd:
   max_gap: 180.0
   max_rms: 0.4
   max_erh: 0.8
   max_erz: 0.8
 
-script11:
+# 10_hypodd.py
+hypodd:
+  docker_image: hypodd:2.1b
+  docker_start_timeout_seconds: 90
+  dimensions:
+    mode: auto
+    maxeve0: 2
+    maxlay: 50
+    maxcl: 200
+  ph2dt:
+    min_weight: 0.0
+    max_dist_km: 120.0
+    max_sep_km: 10.0
+    max_neighbors: 10
+    min_links: 8
+    min_observations: 1
+    max_observations: 100
+  relocation:
+    idat: 3
+    ipha: 3
+    max_dist_km: 120.0
+    obscc: 0
+    obsct: 8
+    min_pair_station_dist: -999
+    max_pair_station_dist: -999
+    max_gap: -999
+    istart: 2
+    isolve: 2
+    iaq: 1
+    cluster_id: 0
+    iteration_sets:
+      - [5, 0.01, 0.01, -999, -999, 1.00, 0.50, -999, -999, 20]
+      - [5, 0.01, 0.01, -999, -999, 1.00, 0.50, 6, 4, 20]
+      - [5, 1.00, 0.50, -999, 2, 0.01, 0.005, 6, 4, 20]
+      - [5, 1.00, 0.50, 6, 2, 0.01, 0.005, 6, 4, 20]
+      - [5, 1.00, 0.50, 6, 0.5, 0.01, 0.005, 6, 4, 20]
+  velocity_model:
+    top_km: [0.0, 4.0, 10.0, 25.0, 30.0]
+    vp_km_s: [5.0, 6.2, 6.3, 7.0, 8.0]
+    vp_vs_ratio: 1.86
+
+# 09_cc_dd.py
+cc_dd:
   max_dist_km_cc: 3.0
   cc_threshold: 0.7
   win_before: 0.1
@@ -108,8 +164,15 @@ script11:
   freq_min: 2.0
   freq_max: 15.0
   network: 3A
+  worker_count: null
+  chunk_size: null
+  p_channel: EHZ
+  s_channel: EHE
+  max_abs_dt_seconds: 10.0
 
-script12:
+# threshold-analysis optional command
+threshold_analysis:
+  dpi: 300
   thresholds_map:
     01-01: 0.1
     02-02: 0.2

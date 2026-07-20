@@ -206,7 +206,7 @@ def run(ctx):
 def main():
     from seimlai.context import build_context
 
-    run(build_context("config.yaml"))
+    run(build_context("user_configuration/config.yaml"))
 
 
 run_relative_relocation = run
