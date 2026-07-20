@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 PHASE_INPUT_NAME = "phase.dat"
@@ -81,7 +82,7 @@ def _format_row(values):
     return " ".join(_format_value(value) for value in values)
 
 
-def _write_ph2dt_input(path, cfg):
+def _write_ph2dt_input(path, cfg, station_name=STATION_INPUT_NAME, phase_name=PHASE_INPUT_NAME):
     params = [
         cfg["min_weight"],
         cfg["max_dist_km"],
@@ -95,9 +96,9 @@ def _write_ph2dt_input(path, cfg):
         "\n".join([
             "* ph2dt.inp - input control file for program ph2dt",
             "* Input station file:",
-            STATION_INPUT_NAME,
+            station_name,
             "* Input phase file:",
-            PHASE_INPUT_NAME,
+            phase_name,
             "* MINWGHT MAXDIST MAXSEP MAXNGH MINLNK MINOBS MAXOBS",
             _format_row(params),
             "",
@@ -448,7 +449,7 @@ def _ensure_docker_image(image, target, program, run_dir, log_dir):
         raise RuntimeError(f"Docker image build failed for {image}. See {log_path}.")
 
 
-def _run_docker_command(image, run_dir, log_dir, binary, input_name):
+def _run_docker_command(image, hypodd_dir, work_dir, log_dir, binary, input_name):
     stdout_path = Path(log_dir) / f"{binary}.stdout"
     stderr_path = Path(log_dir) / f"{binary}.stderr"
     command = [
@@ -456,9 +457,9 @@ def _run_docker_command(image, run_dir, log_dir, binary, input_name):
         "run",
         "--rm",
         "-v",
-        f"{run_dir.parent.resolve()}:/work",
+        f"{Path(hypodd_dir).resolve()}:/work",
         "-w",
-        "/work/input&output",
+        f"/work/{Path(work_dir).resolve().relative_to(Path(hypodd_dir).resolve()).as_posix()}",
         image,
         binary,
         input_name,
@@ -481,7 +482,7 @@ def _run_docker_command(image, run_dir, log_dir, binary, input_name):
         stdout_tail = stdout_path.read_text(encoding="utf-8", errors="replace").splitlines()[-10:]
         if stdout_tail:
             print("\n".join(stdout_tail), file=sys.stderr)
-        raise RuntimeError(f"{binary} failed with exit code {result.returncode}. See logs in {run_dir}.")
+        raise RuntimeError(f"{binary} failed with exit code {result.returncode}. See logs in {log_dir}.")
 
     dimension_errors = [
         line.strip()
@@ -500,12 +501,14 @@ def _add_reloc_header(path):
     path.write_text(f"{HYPODD_RELOC_HEADER}\n{content}", encoding="utf-8")
 
 
-def _prepare_run_dir(ctx):
-    run_dir = Path(ctx.paths.hypodd_run_dir)
-    input_dir = Path(ctx.paths.hypodd_input_dir)
+def _prepare_run_dirs(ctx):
+    ph2dt_input_dir = Path(ctx.paths.hypodd_ph2dt_input_path).parent
+    ph2dt_output_dir = Path(ctx.paths.hypodd_run_dir)
+    hypodd_input_dir = Path(ctx.paths.hypodd_input_dir)
     output_dir = Path(ctx.paths.hypodd_output_dir)
-    run_dir.mkdir(parents=True, exist_ok=True)
-    input_dir.mkdir(parents=True, exist_ok=True)
+    ph2dt_input_dir.mkdir(parents=True, exist_ok=True)
+    ph2dt_output_dir.mkdir(parents=True, exist_ok=True)
+    hypodd_input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     phase_path = Path(ctx.paths.dd_output_file)
@@ -519,68 +522,84 @@ def _prepare_run_dir(ctx):
     _require_file(HYPODD_TEMPLATE, "local hypoDD include template")
     _require_file(HYPODD_DOCKERFILE, "local HypoDD Dockerfile")
 
-    shutil.copy2(phase_path, run_dir / PHASE_INPUT_NAME)
-    shutil.copy2(station_path, run_dir / STATION_INPUT_NAME)
-    shutil.copy2(dtcc_path, run_dir / DTCC_NAME)
-    (run_dir / ".dockerignore").write_text(
-        "*\n!ph2dt.inc\n!hypoDD.inc\n",
-        encoding="utf-8",
-    )
-    return run_dir
+    return ph2dt_input_dir, ph2dt_output_dir, hypodd_input_dir
 
 
 def _run(ctx):
     cfg = ctx.raw.hypodd
     mode = _validate_dimension_config(cfg)
     _model_rows(cfg["velocity_model"])
-    run_dir = _prepare_run_dir(ctx)
-    input_dir = Path(ctx.paths.hypodd_input_dir)
+    ph2dt_input_dir, ph2dt_output_dir, hypodd_input_dir = _prepare_run_dirs(ctx)
+    hypodd_dir = Path(ctx.paths.hypodd_dir)
     output_dir = Path(ctx.paths.hypodd_output_dir)
+    phase_path = Path(ctx.paths.dd_output_file)
+    station_path = Path(ctx.paths.dd_station_file)
 
-    _write_ph2dt_input(input_dir / PH2DT_INPUT_NAME, cfg["ph2dt"])
-    _write_hypodd_input(input_dir / HYPODD_INPUT_NAME, cfg)
-    shutil.copy2(input_dir / PH2DT_INPUT_NAME, run_dir / PH2DT_INPUT_NAME)
-    shutil.copy2(input_dir / HYPODD_INPUT_NAME, run_dir / HYPODD_INPUT_NAME)
+    _write_ph2dt_input(
+        ph2dt_input_dir / PH2DT_INPUT_NAME,
+        cfg["ph2dt"],
+        f"../input/{station_path.name}",
+        f"../input/{phase_path.name}",
+    )
+    _write_hypodd_input(hypodd_input_dir / HYPODD_INPUT_NAME, cfg)
     _ensure_docker_ready(cfg["docker_start_timeout_seconds"])
 
     ph2dt_auto, ph2dt_minimums = _ph2dt_dimensions(
-        run_dir / PHASE_INPUT_NAME,
-        run_dir / STATION_INPUT_NAME,
+        phase_path,
+        station_path,
     )
-    ph2dt_values = _render_include(
-        PH2DT_TEMPLATE,
-        run_dir / PH2DT_INCLUDE_NAME,
-        mode,
-        ph2dt_auto,
-        ("MEV", "MSTA", "MOBS"),
-    )
-    if mode == "manual":
-        _validate_minimums(ph2dt_values, ph2dt_minimums, PH2DT_INCLUDE_NAME)
-    print("ph2dt dimensions: " + ", ".join(f"{key}={value}" for key, value in ph2dt_values.items()))
+    with tempfile.TemporaryDirectory(prefix="seimlai-hypodd-") as build_dir_name:
+        build_dir = Path(build_dir_name)
+        ph2dt_values = _render_include(
+            PH2DT_TEMPLATE,
+            build_dir / PH2DT_INCLUDE_NAME,
+            mode,
+            ph2dt_auto,
+            ("MEV", "MSTA", "MOBS"),
+        )
+        if mode == "manual":
+            _validate_minimums(ph2dt_values, ph2dt_minimums, PH2DT_INCLUDE_NAME)
+        print("ph2dt dimensions: " + ", ".join(f"{key}={value}" for key, value in ph2dt_values.items()))
 
-    ph2dt_content = (run_dir / PH2DT_INCLUDE_NAME).read_text(encoding="utf-8")
-    ph2dt_image = _derived_image_name(cfg["docker_image"], "ph2dt", ph2dt_content)
-    _ensure_docker_image(ph2dt_image, "ph2dt-runtime", "ph2dt", run_dir, output_dir)
-    _run_docker_command(ph2dt_image, run_dir, output_dir, "ph2dt", PH2DT_INPUT_NAME)
-    for name in (DTCT_NAME, EVENT_DAT_NAME, EVENT_SEL_NAME, STATION_SEL_NAME):
-        _require_file(run_dir / name, f"ph2dt output {name}")
+        ph2dt_content = (build_dir / PH2DT_INCLUDE_NAME).read_text(encoding="utf-8")
+        ph2dt_image = _derived_image_name(cfg["docker_image"], "ph2dt", ph2dt_content)
+        _ensure_docker_image(ph2dt_image, "ph2dt-runtime", "ph2dt", build_dir, output_dir)
+        _run_docker_command(
+            ph2dt_image,
+            hypodd_dir,
+            ph2dt_output_dir,
+            output_dir,
+            "ph2dt",
+            f"../input/{PH2DT_INPUT_NAME}",
+        )
+        for name in (DTCT_NAME, EVENT_DAT_NAME, EVENT_SEL_NAME, STATION_SEL_NAME):
+            _require_file(ph2dt_output_dir / name, f"ph2dt output {name}")
+        for name in (DTCT_NAME, EVENT_SEL_NAME, STATION_SEL_NAME):
+            shutil.copy2(ph2dt_output_dir / name, hypodd_input_dir / name)
 
-    hypodd_auto, hypodd_minimums = _hypodd_dimensions(run_dir, cfg)
-    hypodd_values = _render_include(
-        HYPODD_TEMPLATE,
-        run_dir / HYPODD_INCLUDE_NAME,
-        mode,
-        hypodd_auto,
-        ("MAXEVE", "MAXDATA", "MAXEVE0", "MAXDATA0", "MAXLAY", "MAXSTA", "MAXCL"),
-    )
-    if mode == "manual":
-        _validate_minimums(hypodd_values, hypodd_minimums, HYPODD_INCLUDE_NAME)
-    print("hypoDD dimensions: " + ", ".join(f"{key}={value}" for key, value in hypodd_values.items()))
+        hypodd_auto, hypodd_minimums = _hypodd_dimensions(hypodd_input_dir, cfg)
+        hypodd_values = _render_include(
+            HYPODD_TEMPLATE,
+            build_dir / HYPODD_INCLUDE_NAME,
+            mode,
+            hypodd_auto,
+            ("MAXEVE", "MAXDATA", "MAXEVE0", "MAXDATA0", "MAXLAY", "MAXSTA", "MAXCL"),
+        )
+        if mode == "manual":
+            _validate_minimums(hypodd_values, hypodd_minimums, HYPODD_INCLUDE_NAME)
+        print("hypoDD dimensions: " + ", ".join(f"{key}={value}" for key, value in hypodd_values.items()))
 
-    hypodd_content = (run_dir / HYPODD_INCLUDE_NAME).read_text(encoding="utf-8")
-    hypodd_image = _derived_image_name(cfg["docker_image"], "hypodd", hypodd_content)
-    _ensure_docker_image(hypodd_image, "hypodd-runtime", "hypoDD", run_dir, output_dir)
-    _run_docker_command(hypodd_image, run_dir, output_dir, "hypoDD", HYPODD_INPUT_NAME)
+        hypodd_content = (build_dir / HYPODD_INCLUDE_NAME).read_text(encoding="utf-8")
+        hypodd_image = _derived_image_name(cfg["docker_image"], "hypodd", hypodd_content)
+        _ensure_docker_image(hypodd_image, "hypodd-runtime", "hypoDD", build_dir, output_dir)
+        _run_docker_command(
+            hypodd_image,
+            hypodd_dir,
+            hypodd_input_dir,
+            output_dir,
+            "hypoDD",
+            HYPODD_INPUT_NAME,
+        )
     reloc_path = Path(ctx.paths.hypodd_reloc_path)
     _require_file(reloc_path, "HypoDD relocation output")
     _add_reloc_header(reloc_path)
