@@ -705,11 +705,13 @@ def analyze_data_by_threshold(ctx):
             )
             log_file.write(log_entry)
         
-    generate_combined_plots(df_plot, COMPARISON_DIRECTORY)
-    
     print(f"\nAnalysis complete!")
     print(f"Single log file saved (SORTED) to: {log_path}")
-    print(f"Single combined PDF saved to: {os.path.join(COMPARISON_DIRECTORY, SINGLE_PDF_FILE)}")
+    if len(df_plot) > 1:
+        generate_combined_plots(df_plot, COMPARISON_DIRECTORY)
+        print(f"Single combined PDF saved to: {os.path.join(COMPARISON_DIRECTORY, SINGLE_PDF_FILE)}")
+    else:
+        print("Combined PDF skipped: at least two picking thresholds are required.")
 
 
 def run(ctx):
