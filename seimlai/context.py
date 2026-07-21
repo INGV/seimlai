@@ -228,6 +228,7 @@ class RuntimeContext:
             "CC_NETWORK": cc_dd_cfg["network"],
             "CC_WORKER_COUNT": cc_dd_cfg["worker_count"],
             "CC_CHUNK_SIZE": cc_dd_cfg["chunk_size"],
+            "CC_MIN_READINGS_PER_PAIR": cc_dd_cfg["min_readings_per_pair"],
             "CC_P_CHANNEL": cc_dd_cfg["p_channel"],
             "CC_S_CHANNEL": cc_dd_cfg["s_channel"],
             "CC_MAX_ABS_DT_SECONDS": cc_dd_cfg["max_abs_dt_seconds"],
@@ -319,7 +320,7 @@ def validate_config(raw: dict[str, Any]) -> None:
         "hypoellipse_check": ["docker_image", "docker_start_timeout_seconds"],
         "dd": ["max_gap", "max_rms", "max_erh", "max_erz"],
         "hypodd": ["docker_image", "docker_start_timeout_seconds", "dimensions", "ph2dt", "relocation", "velocity_model"],
-        "cc_dd": ["use_gpu", "gpu_batch_size", "max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "p_channel", "s_channel", "max_abs_dt_seconds"],
+        "cc_dd": ["use_gpu", "gpu_batch_size", "max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "min_readings_per_pair", "p_channel", "s_channel", "max_abs_dt_seconds"],
         "threshold_analysis": ["dpi", "thresholds_map"],
     }
     missing = []

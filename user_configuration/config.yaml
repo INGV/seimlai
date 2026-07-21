@@ -32,7 +32,7 @@ model:
   s_threshold: 0.8 #threshold decision for P-wave
 
 # 03_phase_picking.py - runtime settings
-phase_picking: 
+phase_picking:
   num_workers_cpu_mps: 2 # number of cpu cores to be used for multiprocessing
   slurm_cpus_default: 4 # number of cpu cores to be used for slurm
 
@@ -44,7 +44,7 @@ gamma:
     - z(km)
   use_dbscan: true #activate dbscan
   use_amplitude: true #if you want to compute amplitude, put true
-  x_km: 
+  x_km:
     - 230
     - 620
   y_km:
@@ -117,11 +117,11 @@ hypodd:
   docker_image: hypodd:2.1b #docker image for hypocenter location
   docker_start_timeout_seconds: 90 #docker start timeout in seconds
   dimensions:
-    mode: auto #auto or manual to create the hypodd.inc file. Put manual if you want to specify the problem dimensions 
+    mode: auto #auto or manual to create the hypodd.inc file. Put manual if you want to specify the problem dimensions
     # The description of the followed parameters are defined in hypoDD.inp file
-    maxeve0: 1 
+    maxeve0: 1
     maxlay: 14
-    maxcl: 30 
+    maxcl: 30
   ph2dt: #parameters for ph2dt.inp file
     min_weight: 0.0 #minimum weight
     max_dist_km: 120.0 #maximum distance in km
@@ -131,7 +131,7 @@ hypodd:
     min_observations: 1 #minimum number of observations
     max_observations: 100 #maximum number of observations
   relocation: # #parameters for hypoDD.inp file (see HypoDD documentation)
-    idat: 3 
+    idat: 3
     ipha: 3
     max_dist_km: 120.0
     obscc: 0
@@ -168,12 +168,13 @@ cc_dd:
   network: "*" #network to be used, for all networks put "*"
   worker_count: null #number of workers to be used
   chunk_size: null #size of data chunks to be processed waveforms
+  min_readings_per_pair: 1 # used to filter the cross correlations using the number of stations
   p_channel: "??Z" #P-wave channel pattern
   s_channel: "??[EN]" #S-wave channel pattern
   max_abs_dt_seconds: 10.0 #maximum absolute travel time difference in seconds
 
 # threshold-analysis optional command
-threshold_analysis: 
+threshold_analysis:
   dpi: 300
   thresholds_map:
     01-01: 0.1
