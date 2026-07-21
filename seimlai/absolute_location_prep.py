@@ -27,38 +27,30 @@ def _load_filtered_inputs():
     # FILE PATHS (derived from config variables)
     filecat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
     filepic = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
-
-    # LETTURA FILE
     df_catalogo = pd.read_csv(filecat)
     df_picks = pd.read_csv(filepic)
 
-    # SORT CATALOGO
     df_catalogo['time'] = pd.to_datetime(df_catalogo['time'])
     df_catalogo = df_catalogo.sort_values('time')
 
-    # SORT PICKS E ASSOCIAZIONE ORIGIN TIME
     df_picks['timestamp'] = pd.to_datetime(df_picks['timestamp'])
     df_event_time = df_catalogo[['event_index', 'time']].copy()
     df_event_time.columns = ['event_idx', 'origin_time']
     df_picks = df_picks.merge(df_event_time, on='event_idx', how='left')
     df_picks = df_picks.sort_values(['origin_time', 'timestamp']).reset_index(drop=True)
 
-    # ANALISI P e S
     df_picks['type'] = df_picks['type'].str.lower()
     grouped = df_picks.groupby(['event_idx', 'type']).size().unstack(fill_value=0)
     grouped.columns.name = None
     grouped = grouped.rename(columns={'p': 'num_p', 's': 'num_s'})
 
-    # FILTRAGGIO EVENTI
     eventi_validi = grouped[(grouped['num_p'] >= h71_min_p) & (grouped['num_s'] >= h71_min_s)].copy()
     print(f"Number of filtered event: {len(eventi_validi)} on {df_picks['event_idx'].nunique()}")
 
-    # ESTRAZIONE PICKS VALIDI
+
     df_picks_filtrati = df_picks[df_picks['event_idx'].isin(eventi_validi.index)]
     df_picks_filtrati = df_picks_filtrati.merge(eventi_validi, left_on='event_idx', right_index=True)
     return df_catalogo, df_picks_filtrati
-
-# --- FUNZIONI DI FORMATTAZIONE E SCRITTURA ---
 
 def format_time(time_str):
     dt = pd.to_datetime(time_str)
@@ -88,12 +80,10 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
         for event_id, group in df_picks_filtrati.groupby('event_idx', sort=False):
             group = group.sort_values("timestamp")
             
-            # Ordina le stazioni, poi i pick per stazione
             for station, station_df in group.groupby('id', sort=False):
                 station_df = station_df.sort_values("timestamp")
                 row = [' '] * 112
 
-                # --- NOME STAZIONE ---
                 station_name = str(station).strip()
                 station_4ch = station_name[:4].rjust(4)
                 for i, ch in enumerate(station_4ch):
@@ -104,13 +94,11 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
                 p_row = station_df[station_df['type'].str.lower() == 'p']
                 s_row = station_df[station_df['type'].str.lower() == 's']
 
-                # --- GESTIONE FASE P (Reale o Fittizia) ---
                 if not p_row.empty:
                     p_time = p_row.iloc[0]['timestamp']
                     prob_p = float(p_row.iloc[0]['prob'])
                     is_fittizia = False
                 elif not s_row.empty:
-                    # Crea P fittizia 5 secondi prima della S
                     s_time = pd.to_datetime(s_row.iloc[0]['timestamp']) 
                     p_time = (s_time - pd.Timedelta(seconds=5)).isoformat()
                     prob_p = -9.999999
@@ -140,21 +128,15 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
                     p_dt = None
                     row[81:89] = list(f"{-9.999999:8.6f}")
 
-                # --- GESTIONE FASE S (MODIFICA QUI) ---
                 if not s_row.empty:
                     row[36:38] = list("ES")
                     s_dt = pd.to_datetime(s_row.iloc[0]['timestamp'])
                     
                     if p_dt is not None:
-                        # --- CORREZIONE CALCOLO SECONDI S ---
-                        # Prendiamo l'inizio del minuto della P (che è quello scritto nel file)
-                        # e calcoliamo la differenza totale in secondi.
-                        # Questo gestisce correttamente il passaggio di minuto (es. P:59s -> S:01s diventa S:61s)
                         p_min_start = p_dt.replace(second=0, microsecond=0)
                         diff = s_dt - p_min_start
                         s_sec_value = diff.total_seconds()
                     else:
-                        # Fallback nel caso remoto in cui non esista una P (nemmeno fittizia)
                         s_sec_value = s_dt.second + s_dt.microsecond / 1e6
                         
                     s_sec_str = f"{s_sec_value:5.2f}".rjust(5)
@@ -230,12 +212,9 @@ def write_h71_file(df_catalogo, df_picks_filtrati, output_path):
 
             f.write("".join(row) + "\n")
 
-# --- CONVERSIONE PESI E RENAME ID ---
-
 def prob_to_weight(prob_str):
     try:
         val = float(prob_str)
-        # Probabilità not defined per P fittizie
         if val == -9.999999: 
             return '4'
         if val >= 0.95:
@@ -291,7 +270,7 @@ def converti_phs_file(file_input, file_output, debug=False):
             else:
                 event_id += 1 
 
-            if debug and idx < 10: # Limito il debug alle prime righe per pulizia
+            if debug and idx < 10:
                 print(f"[DEBUG] Line {idx:03d} | P={prob_p} -> {peso_p} | S={prob_s} -> {peso_s}")
 
             fout.write(''.join(linea_out).rstrip() + '\n')
@@ -394,10 +373,8 @@ def run(ctx):
     _apply_context(ctx)
     df_catalogo, df_picks_filtrati = _load_filtered_inputs()
 
-    # ESECUZIONE CREAZIONE FILE PHS
     write_phs(df_picks_filtrati, df_catalogo, h71_filtered_dir)
 
-    # --- CREAZIONE FILE H71 ---
     output_h71 = os.path.join(h71_filtered_dir, "out.h71")
     write_h71_file(df_catalogo, df_picks_filtrati, output_h71)
 
@@ -405,7 +382,6 @@ def run(ctx):
     phs_output = os.path.join(h71_filtered_dir, "out_conv.phs")
     converti_phs_file(phs_input, phs_output, debug=False)
 
-    # --- CONVERSIONE ID SU FILE H71 ---
     convert_h71_ids(os.path.join(h71_filtered_dir, "out.h71"))
     convert_station_file_for_hypoellipse()
 

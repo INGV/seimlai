@@ -22,18 +22,16 @@ def run(ctx):
     stations_file = stations_csv_path
 
     if not os.path.exists(catalog_file):
-        print(f"Errore: Il file {catalog_file} non esiste. Esegui prima lo script di elaborazione.")
+        print(f"Error: The file {catalog_file} does not exist. Run the processing script first.")
         return
 
     catalog = pd.read_csv(catalog_file)
     station_df = pd.read_csv(stations_file)
 
-    # --- Inizio Plotting PyGMT ---
     pygmt.config(GMT_VERBOSE="q")
 
     fig = pygmt.Figure()
 
-    # Topografia
     pygmt.makecpt(
         cmap="gray",
         series=[-1000, 3000],
@@ -52,7 +50,6 @@ def run(ctx):
 
     fig.coast(shorelines="1/0.25p,black", resolution="h")
 
-    # Terremoti
     pygmt.makecpt(
         cmap="viridis",
         series=[catalog["z(km)"].min(), catalog["z(km)"].max(), 1],
@@ -69,7 +66,6 @@ def run(ctx):
         transparency=20
     )
 
-    # Stazioni
     fig.plot(
         x=station_df["longitude"],
         y=station_df["latitude"],
@@ -81,7 +77,6 @@ def run(ctx):
     fig.colorbar(position="JBC+o2.0c/1.4c+w8c/0.4c+h", frame='af+l"Depth (km)"')
     fig.basemap(map_scale="jBL+o0.3c/-1.5c+w10k+f+l")
 
-    # Inset Italy
     with fig.inset(position="jTR+w3.5c+o0.3c", box="+gwhite+p1p,black"):
         fig.coast(region=[8, 17, 40.5, 47], projection="M3.5c", land="gray85", water="white", shorelines="0.25p,black")
         rect = [
@@ -93,7 +88,6 @@ def run(ctx):
         ]
         fig.plot(data=rect, pen="1p,red")
 
-    # Save and Show
     output_pdf = os.path.join(output_dir, f"map_catalog_{year}_{start_day}_{end_day}.pdf")
     fig.savefig(output_pdf, dpi=300)
     fig.show()

@@ -10,6 +10,10 @@ Nota: N_P e N_S escludono i pick con peso = 3 (subito dopo EP/ES).
 """
 import sys, re, math
 from pathlib import Path
+from datetime import datetime
+import os
+import pandas as pd
+import numpy as np
 
 def parse_summary_line(line):
     """Support both origin formats and variable spacing in tail columns."""
@@ -45,29 +49,20 @@ def parse_summary_line(line):
         HH, MM = HHMM // 100, HHMM % 100
         SSf = float(SSs)
 
-    # ---------------------------------------------------------
-    # TAIL PARSING ROBUSTO (Lettura a ritroso)
-    # ---------------------------------------------------------
     tokens = tail.split()
     if len(tokens) < 3:
         return None
         
     try:
-        # Il terzultimo token è sempre l'RMS o (D + RMS fusi)
         rms_str = tokens[-3]
         
-        # Nel fortunato caso in cui manchi il decimale (anomalia estrema), proviamo a convertire lo stesso
         rms_val = float(rms_str)
         
-        # Se l'RMS è maggiore o uguale a 10, è fuso con la distanza 'd' (es. "113.5414")
         if rms_val >= 10.0 and "." in rms_str:
             rms_he = float("0." + rms_str.split(".")[1])
-            # Poiché 'd' si è fuso, il token precedente (-4) è il GAP
             gap = int(tokens[-4])
         else:
             rms_he = rms_val
-            # Non ci sono fusioni, quindi il token precedente (-4) è 'd', 
-            # e quello ancora prima (-5) è il GAP
             gap = int(tokens[-5])
             
     except (ValueError, IndexError):
@@ -85,7 +80,6 @@ def parse_events(lines):
     N = len(lines); i = 0
     while i < N:
         if re.search(r"\bdate\s+origin\s+lat\s+long\s+depth\b", lines[i]):
-            # summary line (next non-empty)
             j = i + 1
             while j < N and lines[j].strip() == "":
                 j += 1
@@ -94,11 +88,9 @@ def parse_events(lines):
             info = parse_summary_line(lines[j])
             
             if not info:
-                print(f"ATTENZIONE: Evento saltato. Indice riga: {j}. Linea di riepilogo fallita: '{lines[j].strip()}'", file=sys.stderr)
+                print(f"ATTENTION: Event canceled. Row index: {j}. Summary line failed:'{lines[j].strip()}'", file=sys.stderr)
                 i = j + 1
                 continue
-
-            # IPOSTRINGA and coordinates
             ipostringa = f'{info["date"]}_{info["HH"]:02d}{info["MM"]:02d}{int(info["SSf"]):02d}{(info["SSf"]-int(info["SSf"])):.2f}'.replace("0.", ".")
             lat = int(info["lat_deg"]) + float(info["lat_min"]) / 60.0
             if info["lat_hem"].lower() == "s": lat = -lat
@@ -107,7 +99,6 @@ def parse_events(lines):
 
             depth = info["depth"]; gap = info["gap"]; rms_he = info["rms_he"]
 
-            # SEH/SEZ
             seh_val = math.nan; sez_val = math.nan
             for t in range(j+1, min(j+8, N-1)):
                 line2 = lines[t]
@@ -119,7 +110,6 @@ def parse_events(lines):
                     if len(nums) >= 2:
                         seh_val = float(nums[0]); sez_val = float(nums[1]); break
 
-            # Travel times block
             k = j + 1
             while k < N and "-- travel times and delays --" not in lines[k]:
                 if re.search(r"\bdate\s+origin\s+lat\s+long\s+depth\b", lines[k]):
@@ -134,20 +124,15 @@ def parse_events(lines):
                     if sline.strip() == "": break
                     if "earthquake location" in sline and re.search(r"\d{2}/\d{2}/\d{2}", sline): break
 
-                    # Conta EP/ES (includendo tutti i pesi, anche il 3)
                     if " EP " in sline or sline.strip().startswith("EP ") or " ES " in sline or sline.strip().startswith("ES "):
                         mpha = re.search(r"\b(EP|ES)\b", sline)
                         if mpha:
                             pha = mpha.group(1)
                         else:
-                            # fallback
                             pha = "EP" if "EP" in sline else "ES"
 
-                        # Incrementa sempre i contatori
                         if pha == "EP": nP += 1
                         else: nS += 1
-
-                        # Residui e std-er per RMS
                         mres = list(re.finditer(r"\s([+-]?\d+\.\d+)\s", " "+sline+" "))
                         resid_val = float(mres[-1].group(1)) if mres else None
                         stder_val = None
@@ -185,7 +170,7 @@ def main(in_file, out_file):
     try:
         lines = [ln.rstrip("\n") for ln in open(in_file, "r", errors="ignore")]
     except FileNotFoundError:
-        print(f"Errore: Il file di input '{in_file}' non è stato trovato.")
+        print(f"Error: Input file '{in_file}' not found.")
         sys.exit(1)
         
     events = parse_events(lines)
@@ -207,10 +192,6 @@ def main(in_file, out_file):
             )
     print(f"Wrote {len(events)} events to {out_file}")
 
-from datetime import datetime
-import os
-import pandas as pd
-import numpy as np
 
 FILE_LOC = None
 FILE_OUT = None
@@ -330,9 +311,6 @@ def read_and_filter_data():
     df_loc = df_loc_raw.iloc[:, :len(col_names_loc)]
     df_loc.columns = col_names_loc
 
-    # NOTE: ERH and ERZ in the .quality file are SEH/SEZ (standard errors in km),
-    # typically 3-10 km, so they are NOT filtered by MAX_ERH/MAX_ERZ (which target
-    # a different error metric). Only GAP and RMS_HYPO filters are applied here.
     df_loc_filtered = df_loc[
         (df_loc['GAP'] < MAX_GAP) &
         (df_loc['RMS_HYPO'] < MAX_RMS)
@@ -361,7 +339,7 @@ def read_and_filter_data():
     print(f"   Successfully assigned sequential IDs to {len(df_loc_final)} filtered events.")
     print("-" * 50) 
 
-    print(f"4. Reading phase arrivals file: {FILE_PHS} (CORREZIONE TEMPO S ULTIMA CHANCE)")
+    print(f"4. Reading phase arrivals file: {FILE_PHS}")
 
     try:
         with open(FILE_PHS, 'r') as f:
@@ -439,8 +417,6 @@ def read_and_filter_data():
                 lines_added += 1
     
     df_phs = pd.DataFrame(data)
-
-    print(f"   *** DEBUG: Righe totali .phs lette: 94. Fasi totali estratte: {lines_added}. ***")
     
     if df_phs.empty:
         df_phs_final = pd.DataFrame(columns=['station_name', 'phase', 'arrival_time_str', 'weight', 'ID'])
@@ -463,24 +439,8 @@ def read_and_filter_data():
     ).drop(columns=['PHS_ID', 'PHS_ID_Match']).copy()
     
     print(f"   Total phases matched to final events: {len(df_phs_final)}")
-    sample_debug_ids = [1594, 1595, 1596, 2965, 2966, 2967]
-    sample_matches = df_loc_final[df_loc_final['ID'].isin(sample_debug_ids)][['T', 'ID']].copy()
-    if not sample_matches.empty:
-        print("   DEBUG sample mapped event IDs from quality:")
-        print(sample_matches.to_string(index=False))
-    print("-" * 40)
-    
-    print(">>> ESEMPIO DI FASI PRONTE PER HYPODD (EVENTO ID 3):")
-    df_event_3 = df_phs_final[df_phs_final['ID'] == 21].copy()
-    
-    if df_event_3.empty:
-        print("Nessuna fase trovata per l'evento ID 3.")
-    else:
-        print(df_event_3[['station_name', 'phase', 'arrival_time_str', 'weight', 'ID']]) 
-    print("-" * 40)
     
     return df_loc_final, df_phs_final
-
 
 def prepare_filtered_data(ctx):
     _apply_context(ctx)

@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# =====================================================================
-# --- LIBRERIE ESTERNE ---
-# =====================================================================
 import os
 import gc
 import time
@@ -30,12 +27,12 @@ def _iter_year_days():
 
 
 # =====================================================================
-# --- 1. FUNZIONI DI SUPPORTO ---
+# --- 1. AMPLITUDE CALCULATION ---
 # =====================================================================
 def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
     """
-    Cerca l'ampiezza massima su una traccia già convertita in velocità (VEL).
-    Salva gli errori in 'logs' per non creare conflitti tra i core in scrittura.
+    Find the maximum amplitude on a track that has already been converted to velocity (VEL).
+    Save errors to 'logs' to avoid write conflicts between cores.
     """
     try:
         t = UTCDateTime(pick_time)
@@ -61,8 +58,8 @@ def get_peak_amplitude(pick_time, stream_vel, logs, window_sec=2.0):
 
 def preprocess_stream_for_picking(st, logs, fmin=0.5, fmax=30.0, min_duration_sec=30.0):
     """
-    Preprocessing usato solo per il picking PhaseNet/EQTransformer.
-    Evita fill_value=0: interpola solo gap piccoli, poi spezza i gap rimasti.
+    Preprocessing used only for PhaseNet/EQTransformer picking.
+    Avoid `fill_value=0`: interpolate only small gaps, then split the remaining gaps.
     """
     if len(st) == 0:
         return Stream()
@@ -120,7 +117,7 @@ def preprocess_stream_for_picking(st, logs, fmin=0.5, fmax=30.0, min_duration_se
 
 def preprocess_stream_for_amplitude(st, logs):
     """
-    Prepara lo stream usato per il calcolo dell'ampiezza senza filtrarlo come il picking.
+    Prepare the stream used to calculate the amplitude without filtering it, as with picking.
     """
     if len(st) == 0:
         return Stream()
@@ -169,14 +166,12 @@ def has_three_components(st):
 
 
 # =====================================================================
-# --- 2. FUNZIONE WORKER (Eseguita dai singoli core) ---
+# --- 2. WORKER FUNCTION (Executed by individual cores) ---
 # =====================================================================
 def process_station_worker(args):
-    # IMPORT LOCALE: Il worker carica dal config solo i parametri del modello.
-    # Questo permette alla GPU di attivarsi in totale sicurezza per ogni processo.
+    # LOCAL IMPORT: The worker loads only the model parameters from the config.
+    # This allows the GPU to be activated safely for each process.
     from seimlai.context import build_context
-
-    # FRENO CPU: Evita l'ingorgo matematico tra i 16 worker attivi
     torch.set_num_threads(1)
 
     net, stat, day, stat_path, inv_path, year, config_path = args
@@ -193,9 +188,8 @@ def process_station_worker(args):
     logs = []
     pick_df_list = []
     
-    # STAMPA LIVE
-    print(f"🔄 [Worker {model_device}] -> Sto processando la stazione: {net}.{stat} (Giorno {day})", flush=True)
-    logs.append(f"[{net}.{stat}] Inizio elaborazione su {model_device}...")
+    print(f"[Worker {model_device}] -> Station: {net}.{stat} (Day {day})", flush=True)
+    logs.append(f"[{net}.{stat}] Start processing on {model_device}...")
     
     stream = Stream()
     stream_pick = Stream()
@@ -203,7 +197,6 @@ def process_station_worker(args):
     classified = None
     outputs = []
 
-    # === SELEZIONE GERARCHICA CANALI (HH > EH > BH) ===
     all_subdirs = [d for d in os.listdir(stat_path) if d.endswith(".D")]
     candidates = {}
     
@@ -228,8 +221,6 @@ def process_station_worker(args):
         subdir_list.sort(key=lambda x: x[0])
         selected_subdirs.append(subdir_list[0][1])
 
-    # === LETTURA FILE SISMICI ===
-    # === LETTURA FILE SISMICI ===
     for subdir in selected_subdirs:
         full_path = os.path.join(stat_path, subdir)
         if os.path.isdir(full_path):
@@ -243,27 +234,23 @@ def process_station_worker(args):
                 except Exception as e:
                     logs.append(f"[{net}.{stat}] Errore lettura {fname}: {e}")
 
-    # Se non ha letto nulla, restituisce subito liste vuote
     if len(stream) == 0:
         return pd.DataFrame(), logs
 
-    # =========================================================
-    #  1. SCUDO MORBIDO SUI GAP (Salva dati buoni e RAM)
-    # =========================================================
     try:
         stream.sort()
-        # Misuriamo la lunghezza totale dei dati senza riempire i gap con zeri.
+        # Let's measure the total length of the data without filling in the gaps with zeros.
         t_start = min(tr.stats.starttime for tr in stream)
         t_end = max(tr.stats.endtime for tr in stream)
         durata_ore = (t_end - t_start) / 3600.0
 
-        # Mettiamo un limite di "sopravvivenza" largo (48 ore) per gestire i file enormi a cavallo di mezzanotte
+        # Let's set a generous "survival" limit (48 hours) to handle very large files that span midnight
         if durata_ore > 48.0:
-            logs.append(f"[{net}.{stat}] SKIP: Dati corrotti (Durata: {durata_ore:.1f}h). Rischio OOM!")
+            logs.append(f"[{net}.{stat}] SKIP: (Duration: {durata_ore:.1f}h). Risk of OOM!")
             return pd.DataFrame(), logs
-            
+        
     except Exception as e:
-        logs.append(f"[{net}.{stat}] Errore durante il controllo durata: {e}")
+        logs.append(f"[{net}.{stat}] Error during duration control: {e}")
         return pd.DataFrame(), logs
     # =========================================================
 
@@ -276,31 +263,25 @@ def process_station_worker(args):
     )
 
     if len(stream_pick) == 0:
-        logs.append(f"[{net}.{stat}] Skipped: stream_pick vuoto dopo preprocessing.")
+        logs.append(f"[{net}.{stat}] Skipped: stream_pick empty after preprocessing.")
         return pd.DataFrame(), logs
 
     if not has_three_components(stream_pick):
-        logs.append(f"[{net}.{stat}] Skipped: non ha 3 componenti Z/N/E o Z/1/2 dopo preprocessing.")
+        logs.append(f"[{net}.{stat}] Skipped: no 3 components Z/N/E or Z/1/2 after preprocessing.")
         return pd.DataFrame(), logs
 
     try:
-        # === RIMOZIONE RISPOSTA STRUMENTALE ===
-        # === RIMOZIONE RISPOSTA STRUMENTALE ===
         stream_amp = preprocess_stream_for_amplitude(stream, logs)
 
         if len(stream_amp) == 0:
-            logs.append(f"[{net}.{stat}] Warning: stream_amp vuoto. Ampiezze saranno NaN.")
+            logs.append(f"[{net}.{stat}] Warning: stream_amp empty. Amplitudes will be NaN.")
 
-        # =========================================================
-        # ✨ 3. RICERCA ESATTA DELL'XML CON STAMPA LIVE
-        # =========================================================
         xml_reale = None
         cartella_xml = os.path.dirname(inv_path)
-        nome_esatto_xml = f"{net}.{stat}.xml" # Es: 3A.MZ09.xml
+        nome_esatto_xml = f"{net}.{stat}.xml" 
 
         if len(stream_amp) > 0 and os.path.exists(cartella_xml):
             for f in os.listdir(cartella_xml):
-                # Il nome del file deve essere ESATTAMENTE quello che cerchiamo
                 if f == nome_esatto_xml:
                     xml_reale = os.path.join(cartella_xml, f)
                     break
@@ -309,7 +290,6 @@ def process_station_worker(args):
             from obspy import read_inventory
             inv = read_inventory(xml_reale)
 
-            # --- SOLUZIONE GENERALIZZATA ---
             original_channels = []
             for tr in stream_amp:
                 original_channels.append(tr.stats.channel)
@@ -327,29 +307,23 @@ def process_station_worker(args):
             try:
                 stream_amp.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt, water_level=60)
 
-                # STAMPA LIVE: SUCCESSO!
-                print(f"[XML] {net}.{stat} -> Trovato ({nome_file_trovato}) | Convertito in VEL (m/s)", flush=True)
+                print(f"[XML] {net}.{stat} -> file ({nome_file_trovato}) | Converted in VEL (m/s)", flush=True)
 
             except Exception as e:
-                logs.append(f"[{net}.{stat}] Errore remove_response: {e}. Provo senza risposta.")
-                # STAMPA LIVE: ERRORE MATEMATICO (Es. XML corrotto all'interno)
-                print(f"[XML] {net}.{stat} -> Trovato ({nome_file_trovato}), ma Errore Matematico | Mantenuto in Counts", flush=True)
+                logs.append(f"[{net}.{stat}] Error remove_response: {e}.")
+                print(f"[XML] {net}.{stat} -> file ({nome_file_trovato}), but Error | Kept in Counts", flush=True)
 
             for i, tr in enumerate(stream_amp):
                 tr.stats.channel = original_channels[i]
 
         elif len(stream_amp) > 0:
-            logs.append(f"[{net}.{stat}] Warning: XML {nome_esatto_xml} non trovato in {cartella_xml}. Ampiezza in Counts.")
+            logs.append(f"[{net}.{stat}] Warning: XML {nome_esatto_xml} not found in {cartella_xml}. Amplitude in Counts.")
             # STAMPA LIVE: FILE MANCANTE
-            print(f" [XML] {net}.{stat} -> {nome_esatto_xml} NON TROVATO | Mantenuto in Counts", flush=True)
+            print(f" [XML] {net}.{stat} -> {nome_esatto_xml} NOT FOUND | Kept in Counts", flush=True)
 
-        # === INFERENZA RETE NEURALE ===
-        # === INFERENZA RETE NEURALE ===
         classified = model.classify(stream_pick, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
         outputs = classified.picks
         
-        # === ESTRAZIONE AMPIEZZE ===
-        # === ESTRAZIONE AMPIEZZE ===
         for p in outputs:
             if len(stream_amp) > 0:
                 amp_val = get_peak_amplitude(p.peak_time.datetime, stream_amp, logs)
@@ -364,12 +338,11 @@ def process_station_worker(args):
                 "type": p.phase.lower()
             })
             
-        logs.append(f"[{net}.{stat}] Completato. Trovati {len(pick_df_list)} picks.")
+        logs.append(f"[{net}.{stat}] completed. Found {len(pick_df_list)} picks.")
 
     except Exception as e:
-        logs.append(f"[{net}.{stat}] Errore fatale su {stat}: {e}")
+        logs.append(f"[{net}.{stat}] fatal Error {e}")
 
-    # === PULIZIA MEMORIA RAM ===
     del stream, stream_pick, stream_amp
     if classified is not None: del classified, outputs
     import gc
@@ -379,7 +352,7 @@ def process_station_worker(args):
 
 
 # =====================================================================
-# --- 3. MAIN SCRIPT (Il "Direttore d'orchestra") ---
+# --- 3. MAIN SCRIPT ---
 # =====================================================================
 def _terminate_executor_workers(executor):
     processes = getattr(executor, "_processes", None)
@@ -399,13 +372,11 @@ def _terminate_executor_workers(executor):
 
 
 def execute_phase_picking(ctx):
-    # 1. OBBLIGATORIO: Prepariamo il multiprocessing PRIMA di attivare la GPU
     try:
         mp.set_start_method('spawn', force=True)
     except RuntimeError:
         pass
 
-    # 2. SOLO ORA importiamo le directory e i parametri generali dal context
     _apply_context(ctx, include_device=True)
 
     os.makedirs(output_picks_dir, exist_ok=True)
@@ -416,20 +387,17 @@ def execute_phase_picking(ctx):
 
     overall_start_time = time.time()
 
-    # 3. LETTURA RISORSE DI CALCOLO
     if device.type == "mps" or device.type == "cpu":
         NUM_WORKERS = PHASE_NUM_WORKERS_CPU_MPS
     else:
-        # Sul Cluster, legge dinamicamente i core che hai chiesto con #SBATCH
         slurm_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', PHASE_SLURM_CPUS_DEFAULT))
         NUM_WORKERS = slurm_cpus
 
-    print(f"Avvio elaborazione parallela con {NUM_WORKERS} WORKERS!", flush=True)
-    print(f"Dispositivo inferenza: {device_name} ({device})", flush=True)
+    print(f"Start parallel processing with {NUM_WORKERS} WORKERS!", flush=True)
+    print(f"Inference device: {device_name} ({device})", flush=True)
     log_file.write(f"Workers: {NUM_WORKERS}\n")
     log_file.write(f"Device: {device_name} ({device})\n")
 
-    # 4. CICLO SUI GIORNI
     for current_year, day in _iter_year_days():
         log_file.write(f"\n--- Processing year {current_year}, day: {day} ---\n")
         print(f"\nProcessing year {current_year}, day: {day}", flush=True)
@@ -442,7 +410,6 @@ def execute_phase_picking(ctx):
         if not os.path.exists(current_waveform_base):
             continue
 
-        # Preparazione dei pacchetti di lavoro (tasks) per le stazioni
         tasks = []
         for net in sorted(os.listdir(current_waveform_base)):
             net_path = os.path.join(current_waveform_base, net)
@@ -455,7 +422,6 @@ def execute_phase_picking(ctx):
                 inv_path = os.path.join(inventory_dir, f"{net}.{stat}.xml")
                 tasks.append((net, stat, day, stat_path, inv_path, current_year, str(ctx.config_path)))
 
-        # Esecuzione in parallelo
         all_daily_picks = []
         executor = ProcessPoolExecutor(max_workers=NUM_WORKERS)
         futures = {}
@@ -464,11 +430,9 @@ def execute_phase_picking(ctx):
             for task in tasks:
                 futures[executor.submit(process_station_worker, task)] = task
         
-            # Man mano che i worker finiscono, si raccolgono i risultati
             for future in as_completed(futures):
                 df_station, worker_logs = future.result()
             
-                # Salvataggio nel file log di tutto il lavoro della stazione
                 for msg in worker_logs:
                     log_file.write(msg + "\n")
             
@@ -476,7 +440,7 @@ def execute_phase_picking(ctx):
                     all_daily_picks.append(df_station)
         except KeyboardInterrupt:
             interrupted = True
-            print("\nInterruzione richiesta: arresto dei worker in corso...", flush=True)
+            print("\nInterruption requested: workers are currently being shut down...", flush=True)
             log_file.write("\nInterrupted by user. Stopping worker processes...\n")
             log_file.flush()
             for future in futures:
@@ -488,19 +452,16 @@ def execute_phase_picking(ctx):
         finally:
             if not interrupted:
                 executor.shutdown(wait=True)
-
-        # Salvataggio unico a fine giornata nel CSV
         if all_daily_picks:
             try:
                 final_daily_df = pd.concat(all_daily_picks, ignore_index=True)
                 final_daily_df = final_daily_df.sort_values("timestamp")
                 final_daily_df.to_csv(daily_csv, index=False)
                 log_file.write(f"Daily CSV sorted and saved: {daily_csv} with {len(final_daily_df)} picks.\n")
-                print(f"Giorno {day} completato: {len(final_daily_df)} picks trovati.", flush=True)
+                print(f"Day {day} completed: {len(final_daily_df)} picks found.", flush=True)
             except Exception as e:
                 log_file.write(f"Error sorting/saving daily CSV: {e}\n")
 
-    # 5. CHIUSURA
     overall_end_time = time.time()
     total_duration = overall_end_time - overall_start_time
     print(f"\nTotal picking time: {total_duration:.2f} seconds", flush=True)

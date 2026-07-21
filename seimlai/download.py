@@ -22,7 +22,6 @@ import glob
 import random
 import matplotlib.pyplot as plt
 from datetime import timedelta, datetime
-# Nuove librerie per il parallelismo
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import sys
@@ -37,7 +36,7 @@ def _apply_context(ctx):
     globals().update(ctx.legacy_globals(include_fdsn=True))
 
 def log(message):
-    """Scrive un messaggio sia a video che su file in modo thread-safe"""
+    """Writes a message both to the screen and to a file in a thread-safe manner"""
     with io_lock:
         print(message)
         log_file.write(message + "\n")
@@ -83,27 +82,21 @@ def get_combined_stations(*args, **kwargs):
     
     return combined_inv
 
-# === Funzione Worker per il download parallelo ===
+# === Worker Function for Parallel Downloads ===
 def process_single_channel(net_code, sta_code, comp, t0, t1, year, day_of_year):
     """
-    Questa funzione viene eseguita in parallelo da più worker.
-    Scarica un singolo canale per un singolo giorno.
+    This function is performed in parallel by multiple workers.
+    Download a single channel for a single day.
     """
     try:
-        # Tentativo di download
         st = try_with_clients("get_waveforms", network=net_code, station=sta_code, 
                               location="*", channel=comp, starttime=t0, endtime=t1)
-
-        # Costruzione percorsi
         folder = os.path.join(root_dir, year, net_code, sta_code, f"{comp}.D")
-        
-        # Creazione cartella (os.makedirs è thread-safe nelle versioni recenti di Python, ma ok)
         os.makedirs(folder, exist_ok=True)
 
         filename = f"{net_code}.{sta_code}..{comp}.D.{year}.{day_of_year}"
         filepath = os.path.join(folder, filename)
 
-        # Controllo esistenza file
         if not os.path.exists(filepath):
             st.write(filepath, format="MSEED")
             log(f"Saved: {filepath}")
@@ -112,15 +105,10 @@ def process_single_channel(net_code, sta_code, comp, t0, t1, year, day_of_year):
 
     except Exception as e:
         err_msg = str(e)
-        # === GESTIONE ERRORI INTELLIGENTE ===
-        # Se l'errore è "No data" o "404", è normale per le stazioni temporanee.
-        # Lo logghiamo solo se vogliamo (qui ho messo pass per pulizia, o log info).
         if "No data" in err_msg or "404" in err_msg:
-             # Decommenta la riga sotto se vuoi vedere i messaggi "Missing data"
              log(f"  [Info] Missing data for {net_code}.{sta_code}.{comp}")
              pass
         else:
-            # Se è un errore vero (Timeout, errore scrittura, ecc), lo stampiamo!
             log(f"  [!] ERROR downloading {net_code}.{sta_code}.{comp}: {err_msg}")
 
 
@@ -158,14 +146,11 @@ def run(ctx):
         log(f"\n>> Downloading day {t0.date}")
 
         try:
-            # 1. Scarichiamo l'inventario aggregato da tutti i client
             inventory = get_combined_stations(starttime=t0, endtime=t1,
                                              minlatitude=minlatitude, maxlatitude=maxlatitude,
                                              minlongitude=minlongitude, maxlongitude=maxlongitude,
                                              level="response", network=network, channel=channel,
                                              station=stations_list)
-
-            # Lista dei "lavori" da fare in parallelo
             download_tasks = []
 
             for net in inventory:
@@ -183,7 +168,6 @@ def run(ctx):
                         comp = chan.code
                         components_found.append(comp)
 
-                        # Recupero metadati sensore (per il CSV dopo)
                         try:
                             if chan.response and not sensor:
                                 sensor = chan.sensor.description
@@ -191,8 +175,6 @@ def run(ctx):
                         except:
                             pass
                     
-                        # Invece di scaricare qui, aggiungiamo il compito alla lista
-                        # Parametri: (net, sta, comp, t0, t1, year, day_of_year)
                         task = (net_code, sta_code, comp, t0, t1, year, day_of_year)
                         if task not in download_tasks:
                             download_tasks.append(task)
@@ -202,13 +184,11 @@ def run(ctx):
                         single_inv = inventory.select(network=net_code, station=sta_code)
                         xml_filename = f"{net_code}.{sta_code}.xml"
                         xml_path = os.path.join(inventory_dir, xml_filename)
-                        # Sovrascriviamo l'XML
                         single_inv.write(xml_path, format="STATIONXML")
                     except Exception as e:
                         log(f"  [!] Error saving StationXML for {net_code}.{sta_code}: {e}")
 
                     # === Save station metadata to list ===
-                    # Controlliamo se abbiamo già salvato questa stazione
                     already_present = any(d['network'] == net_code and d['station'] == sta_code for d in station_metadata)
                 
                     if not already_present:
@@ -226,24 +206,19 @@ def run(ctx):
                         }
                         station_metadata.append(row)
 
-            # 2. ESECUZIONE PARALLELA DEI DOWNLOAD
-            # max_workers=4 è ideale per un laptop standard senza sovraccaricare il server
             if download_tasks:
                 log(f"   Starting parallel download of {len(download_tasks)} channels...")
             
                 with ThreadPoolExecutor(max_workers=4) as executor:
-                    # Lanciamo tutti i task
                     futures = [executor.submit(process_single_channel, *task) for task in download_tasks]
                 
-                    # Attendiamo che finiscano tutti prima di passare al giorno successivo
-                    # (necessario per mantenere l'ordine cronologico nel log generale)
+
                     for future in futures:
-                        future.result() # Questo serve anche a catturare eccezioni non gestite
+                        future.result()
 
         except Exception as e:
             log(f"[!] Error fetching stations cycle: {e}")
 
-        # Incrementiamo di un giorno
         current_time += one_day_seconds
 
     print(base_dir)
@@ -262,7 +237,6 @@ def run(ctx):
 
 
     # === Plot 3 components from a random station ===
-    # (Questa parte rimane identica e sequenziale per il debug visivo finale)
     log("\n>> Looking for a station to plot...")
     candidates = []
     for year_path in os.listdir(root_dir):
@@ -323,7 +297,6 @@ def run(ctx):
             plot_path = os.path.join(archive_dir, f"waveform_plot_{sta}.pdf")
             plt.savefig(plot_path, format='pdf', dpi=300)
             log(f"Plot saved to: {plot_path}")
-            # plt.show() # Decommenta se sei in Spyder/Jupyter interattivo
         else:
             log("Found station folder but could not read traces.")
     else:

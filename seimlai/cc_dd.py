@@ -23,7 +23,6 @@ WAVEFORM_DIR = None
 FILE_TRAVEL = None
 OUTPUT_DTCC = None
 
-# --- PARAMETRI ---
 MAX_DIST_KM = None
 CC_THRESHOLD = None
 WIN_BEFORE = None
@@ -68,12 +67,10 @@ def _apply_context(ctx):
         "CC_GPU_BATCH_SIZE": CC_GPU_BATCH_SIZE,
     })
 
-# --- FUNZIONI DI SUPPORTO ---
-
 def parse_travel_dat(filepath):
     """
-    Parsa il file travel.dat per ricostruire il catalogo con tempi assoluti.
-    Restituisce un dizionario: {event_id: {'info': ..., 'picks': [...]}}
+    Parse the travel.dat file to reconstruct the catalog with absolute times.
+    Returns a dictionary: {event_id: {'info': ..., 'picks': [...]}}
     """
     catalog = {}
     current_id = None
@@ -82,7 +79,6 @@ def parse_travel_dat(filepath):
         for line in f:
             if line.startswith('#'):
                 parts = line.split()
-                # Formato: # YYYY MM DD HH MI SS.SS LAT LON DEP ... ID
                 ev_id = int(parts[-1])
                 ot = obspy.UTCDateTime(int(parts[1]), int(parts[2]), int(parts[3]), 
                                      int(parts[4]), int(parts[5])) + float(parts[6])
@@ -95,7 +91,6 @@ def parse_travel_dat(filepath):
                 current_id = ev_id
             else:
                 parts = line.split()
-                # Formato: STA TravelTime Weight Phase
                 catalog[current_id]['picks'].append({
                     'sta': parts[0],
                     'tt': float(parts[1]),
@@ -121,7 +116,7 @@ def _get_waveform_path(sta, time, phase, network=None):
 
 
 def get_waveform(sta, time, phase, network=None):
-    """Carica il segmento waveform che copre la finestra del pick."""
+    """Load the waveform segment that covers the pick window"""
     waveform_path = _get_waveform_path(sta, time, phase, network)
     if waveform_path is None:
         return None
@@ -136,85 +131,6 @@ def get_waveform(sta, time, phase, network=None):
         )
     except Exception:
         return None
-""" def get_waveform(sta, pick_time, phase, network=None):
-    "
-    Cerca e carica la waveform più adatta per una stazione e una fase.
-
-    La ricerca segue l'ordine di priorità definito nel file YAML per:
-    1. network;
-    2. canale;
-    3. location code.
-
-    La traccia viene accettata soltanto se copre il tempo del pick.
-    "
-
-    year = str(pick_time.year)
-    jday = pick_time.strftime("%j")
-
-    network_patterns = _as_list(
-        CC_NETWORK if network is None else network
-    )
-
-    if phase.upper() == "P":
-        channel_patterns = _as_list(CC_P_CHANNEL)
-    elif phase.upper() == "S":
-        channel_patterns = _as_list(CC_S_CHANNEL)
-    else:
-        return None
-
-    for network_pattern in network_patterns:
-        for channel_pattern in channel_patterns:
-
-            file_pattern = os.path.join(
-                WAVEFORM_DIR,
-                year,
-                network_pattern,
-                sta,
-                f"{channel_pattern}.D",
-                (
-                    f"{network_pattern}.{sta}.*."
-                    f"{channel_pattern}.D.{year}.{jday}*"
-                ),
-            )
-
-            matching_paths = sorted(glob(file_pattern))
-
-            for waveform_path in matching_paths:
-                try:
-                    stream = obspy.read(waveform_path)
-
-                    if not stream:
-                        continue
-
-                    stream.merge(method=1, fill_value="interpolate")
-
-                    for trace in stream:
-                        if not (
-                            trace.stats.starttime
-                            <= pick_time
-                            <= trace.stats.endtime
-                        ):
-                            continue
-
-                        trace = trace.copy()
-                        trace.detrend("demean")
-                        trace.taper(max_percentage=0.05, type="cosine")
-                        trace.filter(
-                            "bandpass",
-                            freqmin=FREQ_MIN,
-                            freqmax=FREQ_MAX,
-                            corners=4,
-                            zerophase=True,
-                        )
-
-                        return trace
-
-                except Exception as exc:
-                    print(
-                        f"[WARN] Impossibile leggere {waveform_path}: {exc}"
-                    )
-
-    return None """
 
 
 def _extract_pick_windows(catalog, pick_maps, debug_counts):
@@ -236,7 +152,7 @@ def _extract_pick_windows(catalog, pick_maps, debug_counts):
 
     windows = {}
     failed_windows = 0
-    print(f"Precaricamento di {len(requests_by_path)} waveform uniche per la GPU...")
+    print(f"Preloading {len(requests_by_path)} unique waveforms for the GPU...")
     for waveform_path, requests in tqdm(requests_by_path.items(), desc="Waveform GPU"):
         try:
             stream = obspy.read(waveform_path)
@@ -272,8 +188,8 @@ def _extract_pick_windows(catalog, pick_maps, debug_counts):
             debug_counts[sta]["valid_window"] += 1
 
     print(
-        f"Finestre GPU pronte: {len(windows)}; "
-        f"waveform mancanti: {missing_waveforms}; finestre non valide: {failed_windows}."
+        f"GPU-Ready Windows: {len(windows)}; "
+        f"Missing Waveforms: {missing_waveforms}; Invalid Windows: {failed_windows}."
     )
     return windows
 
@@ -281,7 +197,7 @@ def _extract_pick_windows(catalog, pick_maps, debug_counts):
 def _fit_correlation_peak(cc, shift_len=None):
     cc = np.asarray(cc, dtype=np.float64)
     if cc.size < 3 or not np.isfinite(cc).all():
-        raise ValueError("correlazione non valida")
+        raise ValueError("Invalid correlation")
 
     cc_curvature = np.concatenate((np.zeros(1), np.diff(cc, 2), np.zeros(1)))
     peak_index = int(cc.argmax())
@@ -292,7 +208,7 @@ def _fit_correlation_peak(cc, shift_len=None):
     while last_sample < len(cc) - 1 and cc_curvature[last_sample + 1] <= 0:
         last_sample += 1
     if last_sample - first_sample + 1 < 3:
-        raise ValueError("meno di 3 campioni disponibili per il fit parabolico")
+        raise ValueError("Less than 3 samples available for parabolic fit")
 
     if shift_len is None:
         shift_len = (len(cc) - 1) // 2
@@ -303,7 +219,7 @@ def _fit_correlation_peak(cc, shift_len=None):
         deg=2,
     )
     if coeffs[0] == 0:
-        raise ValueError("fit parabolico degenere")
+        raise ValueError("Degenerate parabolic fit")
     shift = coeffs[1] / (2.0 * coeffs[0])
     coefficient = (4 * coeffs[0] * coeffs[2] - coeffs[1] ** 2) / (4 * coeffs[0])
     return shift, coefficient
@@ -390,8 +306,8 @@ def _run_gpu_correlations(tasks, catalog, pick_maps, debug_counts):
     pair_readings = [[] for _ in tasks]
     failure_count = 0
     print(
-        f"Correlazione di {job_count} coppie di finestre su {device_name} ({device}); "
-        f"batch GPU: {batch_size}."
+        f"Correlation of {job_count} window pairs on {device_name} ({device});"
+        f"GPU batch size: {batch_size}."
     )
 
     with tqdm(total=job_count, desc=f"CC {device.type.upper()}") as progress:
@@ -417,7 +333,7 @@ def _run_gpu_correlations(tasks, catalog, pick_maps, debug_counts):
                     dt_cc = (tt1 - tt2) - shift
                     if abs(dt_cc) > CC_MAX_ABS_DT_SECONDS:
                         print(
-                            f"[WARN] dt.cc sospetto scartato: ev {id1}-{id2}, "
+                            f"[WARN] dt.cc suspicion ruled out: ev {id1}-{id2}, "
                             f"{sta} {phase}, tt1={tt1:.4f}, tt2={tt2:.4f}, "
                             f"shift={shift:.4f}, dt_cc={dt_cc:.4f}"
                         )
@@ -444,7 +360,7 @@ def _run_gpu_correlations(tasks, catalog, pick_maps, debug_counts):
             f_out.write(f"# {id1:>9} {id2:>9} 0.0\n")
             f_out.writelines(readings)
     if failure_count:
-        print(f"[WARN] Fit parabolico non riuscito per {failure_count} correlazioni.")
+        print(f"[WARN] Failed parabolic fit for {failure_count} correlations.")
 
 def _cc_worker_context():
     return {
@@ -491,7 +407,6 @@ def _process_event_pair(task):
     common = sorted(set(picks1.keys()) & set(picks2.keys()))
     for sta, phase in common:
         debug_counts[sta]["candidate_pairs"] += 1
-        # Tempi di arrivo assoluti: Origin Time + Travel Time
         tt1 = picks1[(sta, phase)]
         tt2 = picks2[(sta, phase)]
         t1 = ev1['ot'] + tt1
@@ -518,7 +433,7 @@ def _process_event_pair(task):
             if abs(dt_cc) > CC_MAX_ABS_DT_SECONDS:
                 debug_counts[sta]["invalid_dt"] += 1
                 warnings_out.append(
-                    f"[WARN] dt.cc sospetto scartato: "
+                    f"[WARN] Suspected dt.cc discarded: "
                     f"ev {id1}-{id2}, {sta} {phase}, "
                     f"tt1={tt1:.4f}, tt2={tt2:.4f}, "
                     f"shift={shift:.4f}, dt_cc={dt_cc:.4f}"
@@ -531,7 +446,7 @@ def _process_event_pair(task):
             lines.append(f"{sta:<5} {dt_cc:10.4f} {cc_val:7.4f} {phase}\n")
         except Exception as exc:
             debug_counts[sta]["fit_failures"] += 1
-            warnings_out.append(f"[WARN] CC fallita: ev {id1}-{id2}, {sta} {phase}: {exc}")
+            warnings_out.append(f"[WARN] CC failed: ev {id1}-{id2}, {sta} {phase}: {exc}")
 
     reading_count = len(lines) - 1 if header_written else 0
     if reading_count < CC_MIN_READINGS_PER_PAIR:
@@ -572,11 +487,11 @@ def _merge_debug_counts(target, source):
 def run(ctx):
     _apply_context(ctx)
 
-    print(f"Lettura travel.dat: {os.path.basename(FILE_TRAVEL)}")
+    print(f"Reading travel.dat: {os.path.basename(FILE_TRAVEL)}")
     catalog = parse_travel_dat(FILE_TRAVEL)
     event_ids = sorted(catalog.keys())
 
-    print(f"Calcolo CC su {len(event_ids)} eventi selezionati...")
+    print(f"Calculating CC on {len(event_ids)} selected events...")
     warnings.filterwarnings(
         "ignore",
         message="Maximum of cross correlation lower than*"
@@ -596,7 +511,6 @@ def run(ctx):
             id2 = event_ids[j]
             ev2 = catalog[id2]
 
-            # 1. Filtro Distanza
             dist_m, _, _ = gps2dist_azimuth(ev1['lat'], ev1['lon'], ev2['lat'], ev2['lon'])
             if dist_m / 1000.0 > MAX_DIST_KM:
                 continue
@@ -611,15 +525,15 @@ def run(ctx):
             for sta, _ in picks:
                 debug_counts[sta]["catalog_picks"] += 1
         if CC_USE_GPU:
-            print("GPU richiesta ma non disponibile: uso il fallback CPU.")
+            print("GPU required but not available: Using the CPU fallback.")
         num_workers = _get_cc_worker_count(len(tasks)) if tasks else 1
-        print(f"Esecuzione CC parallela con {num_workers} workers su {len(tasks)} coppie entro {MAX_DIST_KM} km...")
+        print(f"Running parallel CC with {num_workers} workers on {len(tasks)} pairs within {MAX_DIST_KM} km...")
 
         with open(OUTPUT_DTCC, "w") as f_out:
             worker_context = _cc_worker_context()
             if num_workers == 1:
                 _cc_worker_init(catalog, pick_maps, worker_context)
-                for task in tqdm(tasks, desc="Loop Coppie"):
+                for task in tqdm(tasks, desc="Pair Loop"):
                     _, lines, warnings_out, pair_debug = _process_event_pair(task)
                     _merge_debug_counts(debug_counts, pair_debug)
                     for msg in warnings_out:
@@ -637,7 +551,7 @@ def run(ctx):
                 ) as executor:
                     futures = [executor.submit(_process_event_pair_chunk, chunk) for chunk in task_chunks]
 
-                    with tqdm(total=len(tasks), desc="Loop Coppie") as progress:
+                    with tqdm(total=len(tasks), desc="Pair Loop") as progress:
                         for future in as_completed(futures):
                             results = future.result()
                             progress.update(len(results))
@@ -664,9 +578,9 @@ def run(ctx):
         used_stations = ", ".join(
             f"{sta}({count})" for sta, count in sorted(station_counts.items())
         )
-        print(f"Stazioni usate in dt.cc ({len(station_counts)}): {used_stations}")
+        print(f"Stations used in dt.cc ({len(station_counts)}): {used_stations}")
     else:
-        print("Stazioni usate in dt.cc: nessuna")
+        print("Stations used in dt.cc: none")
 
     debug_stations = sorted(
         sta for sta, counts in debug_counts.items()
@@ -674,24 +588,24 @@ def run(ctx):
     )
     station_log_lines = []
     if debug_stations:
-        print("Debug finale stazioni CC:")
+        print("Final CC station debug:")
         for sta in debug_stations:
             counts = debug_counts[sta]
             window_total = counts["valid_window"] + counts["invalid_window"] + counts["read_error"]
             window_info = (
-                f", finestre={counts['valid_window']}/{window_total}"
+                f", windows={counts['valid_window']}/{window_total}"
                 if window_total else ""
             )
             log_line = (
                 f"  {sta}: pick={counts['catalog_picks']}{window_info}, "
-                f"waveform_mancanti={counts['missing_waveform']}, "
-                f"coppie={counts['candidate_pairs']}, "
+                f"waveform_missing={counts['missing_waveform']}, "
+                f"couple={counts['candidate_pairs']}, "
                 f"correlate={counts['correlation_jobs']}, "
-                f"senza_finestra={counts['unavailable_pairs']}, "
-                f"cc_sotto_soglia={counts['below_threshold']}, "
+                f"without_window={counts['unavailable_pairs']}, "
+                f"cc_under_threshold={counts['below_threshold']}, "
                 f"fit_ko={counts['fit_failures']}, "
-                f"dt_scartati={counts['invalid_dt']}, "
-                f"cc_accettate={counts['accepted']}, "
+                f"dt_discarded={counts['invalid_dt']}, "
+                f"cc_accepted={counts['accepted']}, "
                 f"dt.cc={station_counts.get(sta, 0)}"
             )
             print(log_line)
@@ -699,13 +613,13 @@ def run(ctx):
 
     station_log_path = os.path.join(str(ctx.paths.hypodd_output_dir), "cc_station_log")
     with open(station_log_path, "w") as f_log:
-        f_log.write("Debug finale stazioni CC:\n")
+        f_log.write("Station final debug:\n")
         f_log.write("\n".join(station_log_lines))
         if station_log_lines:
             f_log.write("\n")
-    print(f"Log stazioni salvato in {station_log_path}")
+    print(f"Station log saved in {station_log_path}")
 
-    print(f"Fatto! File dt.cc generato in {os.path.dirname(OUTPUT_DTCC)}")
+    print(f"dt.cc file generated in {os.path.dirname(OUTPUT_DTCC)}")
 
 
 def main():
