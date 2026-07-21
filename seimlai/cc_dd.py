@@ -117,17 +117,96 @@ def _get_waveform_path(sta, time, phase, network=None):
     return matching_paths[0] if matching_paths else None
 
 
-def get_waveform(sta, time, phase, network=None):
-    """Carica la waveform migliore che corrisponde ai pattern di network e canale."""
-    waveform_path = _get_waveform_path(sta, time, phase, network)
-    if waveform_path is None:
+#def get_waveform(sta, time, phase, network=None):
+#    """Carica la waveform migliore che corrisponde ai pattern di network e canale."""
+#    waveform_path = _get_waveform_path(sta, time, phase, network)
+#    if waveform_path is None:
+#        return None
+#    try:
+#        st = obspy.read(waveform_path)
+#        st.detrend("demean").filter("bandpass", freqmin=FREQ_MIN, freqmax=FREQ_MAX)
+#        return st[0]
+#    except Exception:
+#        return None
+def get_waveform(sta, pick_time, phase, network=None):
+    """
+    Cerca e carica la waveform più adatta per una stazione e una fase.
+
+    La ricerca segue l'ordine di priorità definito nel file YAML per:
+    1. network;
+    2. canale;
+    3. location code.
+
+    La traccia viene accettata soltanto se copre il tempo del pick.
+    """
+
+    year = str(pick_time.year)
+    jday = pick_time.strftime("%j")
+
+    network_patterns = _as_list(
+        CC_NETWORK if network is None else network
+    )
+
+    if phase.upper() == "P":
+        channel_patterns = _as_list(CC_P_CHANNEL)
+    elif phase.upper() == "S":
+        channel_patterns = _as_list(CC_S_CHANNEL)
+    else:
         return None
-    try:
-        st = obspy.read(waveform_path)
-        st.detrend("demean").filter("bandpass", freqmin=FREQ_MIN, freqmax=FREQ_MAX)
-        return st[0]
-    except Exception:
-        return None
+
+    for network_pattern in network_patterns:
+        for channel_pattern in channel_patterns:
+
+            file_pattern = os.path.join(
+                WAVEFORM_DIR,
+                year,
+                network_pattern,
+                sta,
+                f"{channel_pattern}.D",
+                (
+                    f"{network_pattern}.{sta}.*."
+                    f"{channel_pattern}.D.{year}.{jday}*"
+                ),
+            )
+
+            matching_paths = sorted(glob(file_pattern))
+
+            for waveform_path in matching_paths:
+                try:
+                    stream = obspy.read(waveform_path)
+
+                    if not stream:
+                        continue
+
+                    stream.merge(method=1, fill_value="interpolate")
+
+                    for trace in stream:
+                        if not (
+                            trace.stats.starttime
+                            <= pick_time
+                            <= trace.stats.endtime
+                        ):
+                            continue
+
+                        trace = trace.copy()
+                        trace.detrend("demean")
+                        trace.taper(max_percentage=0.05, type="cosine")
+                        trace.filter(
+                            "bandpass",
+                            freqmin=FREQ_MIN,
+                            freqmax=FREQ_MAX,
+                            corners=4,
+                            zerophase=True,
+                        )
+
+                        return trace
+
+                except Exception as exc:
+                    print(
+                        f"[WARN] Impossibile leggere {waveform_path}: {exc}"
+                    )
+
+    return None
 
 
 def _extract_pick_windows(catalog, pick_maps):
