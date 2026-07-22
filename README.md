@@ -4,7 +4,9 @@
 
 # SeiMLAI: SEIsmic catalog for Machine Learning And Imaging
 
-**SeiMLAI** is a Python workflow that allows you to obtain a **high-resolution seismic catalog** by leveraging known infrastructure and using new machine-learning algorithms for P- and S-wave picking and phase association. After downloading the waveforms for a specific period and area, the waveforms are organised into an archive, and the arrival times of the P- and S-phases are picked. The workflow allows the use of either a pre-trained model, a different deep-learning picker or a user-created model. Once the creation of an archive containing the continuous waveform recorded by a seismic stations, they are employed to create an initial catalogue that can be viewed for the first time. The workflow also offers **accurate post-processing steps** for raw data from machine learning, providing input files for both absolute and relative locations at the end of the workflow that are run using a Docker container.
+**SeiMLAI** is a Python workflow that allows you to obtain a **high-resolution seismic catalog** by leveraging known infrastructure and using new machine-learning algorithms for P- and S-wave picking (Zhu and Beroza, 2019) and phase association (Zhu et al., 2022). After downloading the waveforms for a specific period and area, the waveforms are organised into an archive, and the arrival times of the P- and S-phases are picked. The workflow allows the use of either a pre-trained model, a different deep-learning picker or a user-created model. Once the creation of an archive containing the continuous waveform recorded by a seismic stations, they are employed to create an initial catalogue that can be viewed for the first time. The workflow also offers **accurate post-processing steps** for raw data from machine learning, providing input files for both absolute and relative locations at the end of the workflow that are run using a Docker container.
+
+The product package includes the existing Seisbench and PyGMT libraries for seismic data analysis using machine learning and for the preliminary visualization of the resulting catalog, respectively.
 
 This repository can be used in two ways:
 
@@ -23,7 +25,6 @@ conda activate catalog
 python main.py --help
 python main.py --config user_configuration/config.yaml
 ```
-
 After installing the package, the same CLI is available as:
 
 ```bash
@@ -52,22 +53,6 @@ The user-editable settings are in [user_configuration/config.yaml](./user_config
 | `python main.py plot-catalog` | Run optional catalog plotting. |
 | `python main.py threshold-analysis` | Run optional threshold comparison plots. |
 
-## Single Stage Commands
-
-The easiest way to run one stage is through `main.py`:
-
-```bash
-python main.py 03
-```
-
-Stage commands and optional commands are available through `main.py`:
-
-```bash
-python main.py plot-catalog
-python main.py cc-dd
-python main.py hypodd
-python main.py threshold-analysis
-```
 
 ## Numbered Workflow Stages
 
@@ -75,17 +60,30 @@ python main.py threshold-analysis
 | --- | --- | --- |
 | `01` | `download` | Download data. |
 | `02` | `data-cleaning` | Data cleaning. |
-| `03` | `phase-picking` | Phase picking with the configured CNN model. |
+| `03` | `phase-picking` | Phase picking with the configured deep-learning model available on Seisbench. |
 | `04` | `association` | Phase association and raw catalog building with GaMMA. |
-| `05` | `absolute-location-prep` | Prepare HypoEllipse/Hypo71 input files. |
+| `05` | `absolute-location-prep` | Prepare HypoEllipse input files. |
 | `06` | `hypoellipse-check` | Run absolute location with HypoEllipse in Docker. |
 | `07` | `locations-filtering` | Parse and filter HypoEllipse locations. |
 | `08` | `relative-relocation` | Generate HypoDD catalog and station input files. |
 | `09` | `cc-dd` | Generate cross-correlation differential times in `dt.cc`. |
 | `10` | `hypodd` | Run `ph2dt` and `hypoDD` in Docker. |
 
-Any numbered stage can be run by ID, for example `python main.py 10`.
+## Single Stage Commands
+
+The easiest way to run one stage is through `main.py`:
+
+```bash
+python main.py 03
+```
 The same stages can also be run by command name, for example `python main.py hypodd`.
+
+Stage commands and optional commands are available through `main.py`:
+
+```bash
+python main.py plot-catalog
+python main.py threshold-analysis
+```
 
 ## HypoDD Docker Image
 
@@ -188,7 +186,7 @@ This is useful for notebooks, tests, new scripts, or a future interface around t
 | `context.py` | Loads `user_configuration/config.yaml`, validates settings, builds derived paths/settings, and lazily creates heavy objects such as models, devices, transformers, and FDSN clients. |
 | `download.py` | Implementation for waveform/station download. |
 | `data_cleaning.py` | Implementation for the cleaning stage. |
-| `phase_picking.py` | Implementation for CNN phase picking and pick aggregation. |
+| `phase_picking.py` | Implementation for deep-learning models to phase picking. |
 | `association.py` | Implementation for GaMMA association and raw catalog generation. |
 | `absolute_location_prep.py` | Implementation for HypoEllipse/Hypo71 preparation files. |
 | `hypoellipse_check.py` | Runs HypoEllipse with Docker using generated input files. |
@@ -232,3 +230,86 @@ This is useful for notebooks, tests, new scripts, or a future interface around t
 - `import seimlai.phase_picking` reuses the implementation from Python code.
 
 Most users only need `main.py` and `user_configuration/config.yaml`.
+
+## Software and references
+
+SeiMLAI builds on the following open-source software and methods. Please cite
+the relevant publications when using this workflow.
+
+## References
+
+SeiMLAI relies on the following open-source software and methods. Please cite
+the relevant publications when using this workflow.
+
+- **SeisBench** — Woollam, J., Münchmeyer, J., Tilmann, F., et al. (2022).
+  *SeisBench—A toolbox for machine learning in seismology*. Seismological
+  Research Letters, 93(3), 1695–1709.
+  [https://doi.org/10.1785/0220210324](https://doi.org/10.1785/0220210324)
+
+- **PyGMT** — Tian, D., Fröhlich, Y., Leong, W. J., et al. (2026).
+  *PyGMT: Bridging Python and the Generic Mapping Tools for geospatial
+  visualization and analysis*. Geochemistry, Geophysics, Geosystems, 27,
+  e2026GC013105.
+  [https://doi.org/10.1029/2026GC013105](https://doi.org/10.1029/2026GC013105)
+
+- **PhaseNet** — Zhu, W., & Beroza, G. C. (2019). *PhaseNet: A
+  deep-neural-network-based seismic arrival-time picking method*.
+  Geophysical Journal International, 216(1), 261–273.
+  [https://doi.org/10.1093/gji/ggy423](https://doi.org/10.1093/gji/ggy423)
+
+- **GaMMA** — Zhu, W., McBrearty, I. W., Mousavi, S. M., Ellsworth, W. L.,
+  & Beroza, G. C. (2022). *Earthquake phase association using a Bayesian
+  Gaussian Mixture Model*. Journal of Geophysical Research: Solid Earth, 127,
+  e2021JB023249.
+  [https://doi.org/10.1029/2021JB023249](https://doi.org/10.1029/2021JB023249)
+
+- **EQTransformer** — Mousavi, S. M., Ellsworth, W. L., Zhu, W., Chuang,
+  L. Y., & Beroza, G. C. (2020). *Earthquake transformer—An attentive
+  deep-learning model for simultaneous earthquake detection and phase
+  picking*. Nature Communications, 11, 3952.
+  [https://doi.org/10.1038/s41467-020-17591-w](https://doi.org/10.1038/s41467-020-17591-w)
+
+- **HYPOELLIPSE** — Lahr, J. C. (1989). *HYPOELLIPSE/version 2.0: A computer
+  program for determining local earthquake hypocentral parameters, magnitude,
+  and first-motion pattern*. U.S. Geological Survey Open-File Report 89-116.
+  [https://doi.org/10.3133/ofr89116](https://doi.org/10.3133/ofr89116).
+  Software implementation: [INGV/hypoellipse](https://github.com/INGV/hypoellipse).
+
+- **Docker** — Merkel, D. (2014). *Docker: Lightweight Linux containers for
+  consistent development and deployment*. Linux Journal, 239, 2.
+
+- **hypoDD** — Waldhauser, F., & Ellsworth, W. L. (2000). *A double-difference
+  earthquake location algorithm: Method and application to the Northern Hayward
+  Fault, California*. Bulletin of the Seismological Society of America, 90(6),
+  1353–1368.
+  [https://doi.org/10.1785/0120000006](https://doi.org/10.1785/0120000006)
+
+  Waldhauser, F. (2001). *hypoDD—A program to compute double-difference
+  hypocenter locations*. U.S. Geological Survey Open-File Report 01-113.
+  [Software repository](https://github.com/fwaldhauser/HypoDD).
+
+## Citation
+
+If you use **SeiMLAI** in your research, please cite:
+
+> Fonzetti R., Crocetta A., and Bailo D., (year)
+> Istituto Nazionale di Geofisica e Vulanologia (INGV), Rome, Italy
+> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*. **Nome della rivista**, volume(numero), pagine.  
+> https://doi.org/xxxxx
+
+## License
+
+© 2027 EPOS — European Plate Observing System.
+
+This work is licensed under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/), unless otherwise stated.
+
+Individual software packages, data services, waveform data, station metadata and external images remain subject to their respective licenses and terms of use.
+
+## Contact
+
+**Corresponding author:** [Rossella Fonzetti]  
+[Istituto Nazionale di Geofisica e Vulanologia (INGV), Rome, Italy]  
+[Email](mailto:rossella.fonzetti@ingv.it)
+
+For questions, bug reports, or collaborations related to SeiMLAI, please contact
+the corresponding author.
