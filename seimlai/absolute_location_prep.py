@@ -25,8 +25,19 @@ def _load_filtered_inputs():
     os.makedirs(h71_filtered_dir, exist_ok=True)
 
     # FILE PATHS (derived from config variables)
-    filecat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
-    filepic = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
+    date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
+    filecat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{date_tag_val}.csv")
+    filepic = os.path.join(output_dir, f"gamma_pick_grouped_{date_tag_val}.csv")
+    if not os.path.exists(filecat):
+        legacy_cat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+        if os.path.exists(legacy_cat):
+            filecat = legacy_cat
+    if not os.path.exists(filepic):
+        legacy_pic = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
+        if os.path.exists(legacy_pic):
+            filepic = legacy_pic
+
+    # LETTURA FILE
     df_catalogo = pd.read_csv(filecat)
     df_picks = pd.read_csv(filepic)
 

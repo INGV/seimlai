@@ -470,7 +470,7 @@ def execute_phase_picking(ctx):
     log_file.close()
 
 
-def sort_seismic_picking(df, output_file):
+def sort_seismic_picking(df, output_file, starttime=None, endtime=None):
     # Rename columns
     df = df.rename(columns={
         "station": "Station",
@@ -480,10 +480,16 @@ def sort_seismic_picking(df, output_file):
         "amp": "Amp"
     })
 
-    # Convert Datatime column
+    # Convert Datetime column
     df["Datetime"] = pd.to_datetime(df["Datetime"])
 
-    # Giulian Name computation (1-366)
+    # Strict filtering by starttime and endtime if provided
+    if starttime is not None:
+        df = df[df["Datetime"] >= pd.to_datetime(starttime.datetime)]
+    if endtime is not None:
+        df = df[df["Datetime"] <= pd.to_datetime(endtime.datetime)]
+
+    # Julian Day computation (1-366)
     df["Julian_Day"] = df["Datetime"].dt.dayofyear
 
     # Rename Columns
@@ -517,11 +523,22 @@ def run_sort_picks(ctx):
         # Concatenate all dataframes
         combined_df = pd.concat(all_dfs, ignore_index=True)
         
-        # Define output file
-        outputfile = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
+        # Primary output file with date_tag
+        date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
+        outputfile = os.path.join(output_picks_dir, f"{date_tag_val}_picks_sort.csv")
         
         # Run sorting and saving
-        sort_seismic_picking(combined_df, outputfile)
+        sort_seismic_picking(combined_df, outputfile, starttime=starttime, endtime=endtime)
+
+        # Legacy aliases for backwards compatibility
+        legacy_names = [
+            f"{year}_{start_day_str}_{end_day_str}_picks_sort.csv" if "start_day_str" in globals() else None,
+            f"{start_day}_{end_day}_{year}_picks_sort.csv",
+        ]
+        import shutil
+        for leg in legacy_names:
+            if leg and leg != os.path.basename(outputfile):
+                shutil.copy2(outputfile, os.path.join(output_picks_dir, leg))
     else:
         print("No pick files found to process.")
 
@@ -604,7 +621,9 @@ def analyze_data_by_threshold(ctx):
 
     BASE_DIRECTORY = output_base
     COMPARISON_DIRECTORY = threshold_comparison_dir
-    FILE_NAME = f"{start_day}_{end_day}_{year}_picks_sort.csv"
+    date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
+    PRIMARY_FILE = f"{date_tag_val}_picks_sort.csv"
+    LEGACY_FILE = f"{start_day}_{end_day}_{year}_picks_sort.csv"
     LOG_FILE = "analysis_log.txt"
     SINGLE_PDF_FILE = "combined_analysis_report.pdf"
     
@@ -623,8 +642,9 @@ def analyze_data_by_threshold(ctx):
             match = re.search(r'(\d+\.?\d+)', dir_name) 
             threshold_value = match.group(1) if match else dir_name
             
-            if FILE_NAME in files:
-                file_path = os.path.join(root, FILE_NAME)
+            target_file = PRIMARY_FILE if PRIMARY_FILE in files else (LEGACY_FILE if LEGACY_FILE in files else None)
+            if target_file:
+                file_path = os.path.join(root, target_file)
                 found_any_data = True
                 
                 print(f"Aggregating data from: {dir_name} (Threshold: {threshold_value})")

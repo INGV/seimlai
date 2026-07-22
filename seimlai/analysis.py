@@ -13,11 +13,15 @@ def run(ctx):
     globals().update(ctx.legacy_globals())
 
 
-    # Input file name built from config variables (year, start_day, end_day)
-    nome_file_input = f"gamma_pick_{year}_{start_day}_{end_day}.csv"
-
-    # Build full paths using output_dir from runtime context
+    # Input file name built from config variables
+    date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
+    nome_file_input = f"gamma_pick_{date_tag_val}.csv"
     input_file_path = os.path.join(output_dir, nome_file_input)
+    if not os.path.exists(input_file_path):
+        legacy_path = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
+        if os.path.exists(legacy_path):
+            input_file_path = legacy_path
+
     log_file_path = os.path.join(output_dir, analysis_log_filename)
 
     print(f"Reading file:\n{input_file_path}\n")

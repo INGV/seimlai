@@ -18,7 +18,12 @@ def run(ctx):
         os.environ["GMT_LIBRARY_PATH"] = GMT_LIBRARY_PATH
 
     # --- Derived paths from runtime context ---
-    catalog_file = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+    date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
+    catalog_file = os.path.join(output_dir, f"seismic_catalog_with_latlon_{date_tag_val}.csv")
+    if not os.path.exists(catalog_file):
+        legacy_cat = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+        if os.path.exists(legacy_cat):
+            catalog_file = legacy_cat
     stations_file = stations_csv_path
 
     if not os.path.exists(catalog_file):
@@ -88,8 +93,12 @@ def run(ctx):
         ]
         fig.plot(data=rect, pen="1p,red")
 
-    output_pdf = os.path.join(output_dir, f"map_catalog_{year}_{start_day}_{end_day}.pdf")
+    # Save and Show
+    output_pdf = os.path.join(output_dir, f"map_catalog_{date_tag_val}.pdf")
     fig.savefig(output_pdf, dpi=300)
+    legacy_pdf = os.path.join(output_dir, f"map_catalog_{year}_{start_day}_{end_day}.pdf")
+    if legacy_pdf != output_pdf:
+        fig.savefig(legacy_pdf, dpi=300)
     fig.show()
     print(f"Mappa salvata in: {output_pdf}")
 
