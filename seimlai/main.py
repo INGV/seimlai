@@ -22,6 +22,7 @@ import sys
 import time
 from dataclasses import dataclass
 from importlib import import_module
+from importlib.resources import files
 from typing import Callable
 
 from seimlai.context import build_context, ensure_initial_directories
@@ -60,6 +61,10 @@ OPTIONAL_STEPS = {
 
 STEP_IDS = [step.id for step in STEPS]
 STEP_COMMANDS = {step.command: step.id for step in STEPS}
+
+
+def print_cli_logo():
+    print(files("seimlai").joinpath("logo", "clilogo.txt").read_text(encoding="utf-8"), end="")
 
 
 def continue_steps():
@@ -217,7 +222,7 @@ def run_single_stage(ctx, step_id):
         sys.exit(1)
 
 
-def main():
+def _main():
     args = parse_args()
     try:
         ctx = build_context(args.config)
@@ -256,6 +261,13 @@ def main():
             from_step=args.from_step,
             only_steps=args.only_steps,
         )
+
+
+def main():
+    try:
+        _main()
+    finally:
+        print_cli_logo()
 
 
 if __name__ == "__main__":

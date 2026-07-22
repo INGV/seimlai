@@ -27,3 +27,6 @@ seismic-workflow = "seimlai.main:main"
 
 [tool.setuptools.packages.find]
 include = ["seimlai*"]
+
+[tool.setuptools.package-data]
+seimlai = ["logo/clilogo.txt"]
