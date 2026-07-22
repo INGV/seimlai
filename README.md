@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/seimlai-logo.png" alt="SeiMLAI logo" width="600">
+  <img src="assets/seimlai-logo_2.png" alt="SeiMLAI logo" width="600">
 </p>
 
 # SeiMLAI: SEIsmic catalog for Machine Learning And Imaging
