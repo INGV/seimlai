@@ -24,7 +24,7 @@ stations: # specify station information
 # 03_phase_picking.py - phase picking settings
 model:
   neural_network: PhaseNet #define deep-learing algorithm available on Seisbench
-  model_type: aq2009 #define a pretrained-model available on Seisbench
+  model_type: original #define a pretrained-model available on Seisbench
   custom_model_path: null #if you have a pytorch file (.pth) specity the personal path, otherwise put null
   batch_size: 256 #size of data batches to be processed waveforms
   p_threshold: 0.8 #threshold decision for P-wave

@@ -379,6 +379,9 @@ def execute_phase_picking(ctx):
 
     _apply_context(ctx, include_device=True)
 
+    if ctx.raw.model["custom_model_path"] is None:
+        ctx.phasenet_model
+
     os.makedirs(output_picks_dir, exist_ok=True)
 
     log_file = open(log_file_path, "w")
@@ -487,7 +490,11 @@ def sort_seismic_picking(df, output_file, starttime=None, endtime=None):
     if starttime is not None:
         df = df[df["Datetime"] >= pd.to_datetime(starttime.datetime)]
     if endtime is not None:
-        df = df[df["Datetime"] <= pd.to_datetime(endtime.datetime)]
+        end_datetime = pd.to_datetime(endtime.datetime)
+        if end_datetime == end_datetime.normalize():
+            df = df[df["Datetime"] < end_datetime + pd.Timedelta(days=1)]
+        else:
+            df = df[df["Datetime"] <= end_datetime]
 
     # Julian Day computation (1-366)
     df["Julian_Day"] = df["Datetime"].dt.dayofyear
