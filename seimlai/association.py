@@ -148,11 +148,6 @@ def run(ctx):
     # SAVE Raw CATALOG with km coordinates
     catalog_file_in=os.path.join(output_dir, f"seismic_catalog_{date_tag_val}.csv")
     catalog.to_csv(catalog_file_in, index=False)
-
-    # Legacy copy for compatibility
-    legacy_cat_in = os.path.join(output_dir, f"seismic_catalog_{year}_{start_day}_{end_day}.csv")
-    if legacy_cat_in != catalog_file_in:
-        catalog.to_csv(legacy_cat_in, index=False)
     
     # Save picks 
     assignments["pick_idx"] = assignments["pick_idx"].astype(int)
@@ -173,9 +168,6 @@ def run(ctx):
     # Save all picks (the id .-1 is referred to un-associated picks)
     output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{date_tag_val}.csv")
     picks_with_events.to_csv(output_gamma_picks, index=False)
-    legacy_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
-    if legacy_gamma_picks != output_gamma_picks:
-        picks_with_events.to_csv(legacy_gamma_picks, index=False)
     
     print(f"Picks save in {output_gamma_picks}!")
     
@@ -186,9 +178,6 @@ def run(ctx):
     associated_picks = associated_picks.sort_values(by=["event_idx", "timestamp"])
     output_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{date_tag_val}.csv")
     associated_picks.to_csv(output_associated_picks, index=False)
-    legacy_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
-    if legacy_associated_picks != output_associated_picks:
-        associated_picks.to_csv(legacy_associated_picks, index=False)
     
     print(f"Associated picks saved in {output_associated_picks}!")
     
@@ -205,9 +194,6 @@ def run(ctx):
     catalog_file=os.path.join(output_dir, f"seismic_catalog_with_latlon_{date_tag_val}.csv")
     #Save catalog with correct coordinates
     catalog.to_csv(catalog_file, index=False)
-    legacy_catalog_file = os.path.join(output_dir, f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
-    if legacy_catalog_file != catalog_file:
-        catalog.to_csv(legacy_catalog_file, index=False)
     print("Seismic catalog saved in seismic_catalog_with_latlon.csv con solo longitude e latitude.")
     
     # Use PyGMT to plot the seismicity

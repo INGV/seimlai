@@ -10,8 +10,8 @@ geography: #specify the area limits
   maxlongitude: 14.00
 
 dates: #specify the time window
-  starttime: "2016-10-30"
-  endtime: "2016-10-30"
+  starttime: "2016-12-31"
+  endtime: "2017-01-01"
 
 stations: # specify station information
   network: "*" # put "*" to download all networks

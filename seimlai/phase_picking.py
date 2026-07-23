@@ -536,16 +536,6 @@ def run_sort_picks(ctx):
         
         # Run sorting and saving
         sort_seismic_picking(combined_df, outputfile, starttime=starttime, endtime=endtime)
-
-        # Legacy aliases for backwards compatibility
-        legacy_names = [
-            f"{year}_{start_day_str}_{end_day_str}_picks_sort.csv" if "start_day_str" in globals() else None,
-            f"{start_day}_{end_day}_{year}_picks_sort.csv",
-        ]
-        import shutil
-        for leg in legacy_names:
-            if leg and leg != os.path.basename(outputfile):
-                shutil.copy2(outputfile, os.path.join(output_picks_dir, leg))
     else:
         print("No pick files found to process.")
 
