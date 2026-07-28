@@ -27,6 +27,7 @@ HYPODD_INPUT_NAME = "hypoDD.inp"
 PH2DT_INCLUDE_NAME = "ph2dt.inc"
 HYPODD_INCLUDE_NAME = "hypoDD.inc"
 HYPODD_RELOC_NAME = "hypoDD.reloc"
+HYPODD_MAP_NAME = "map_hypoDD_catalog.pdf"
 HYPODD_SOURCE_REF = "V2.1b"
 HYPODD_CONFIGURATION_DIR = Path(__file__).resolve().parent.parent / "user_configuration" / "hypodd"
 HYPODD_DOCKERFILE = HYPODD_CONFIGURATION_DIR / "Dockerfile"
@@ -501,6 +502,80 @@ def _add_reloc_header(path):
     path.write_text(f"{HYPODD_RELOC_HEADER}\n{content}", encoding="utf-8")
 
 
+def _plot_relocated_catalog(ctx, reloc_path):
+    if ctx.raw.plotting["gmt_library_path"]:
+        import os
+
+        os.environ["GMT_LIBRARY_PATH"] = ctx.raw.plotting["gmt_library_path"]
+
+    import pandas as pd
+    import pygmt
+
+    columns = HYPODD_RELOC_HEADER.removeprefix("# ").split()
+    catalog = pd.read_csv(reloc_path, sep=r"\s+", comment="#", names=columns)
+    if catalog.empty:
+        raise RuntimeError(f"HypoDD relocation catalog is empty: {reloc_path}")
+
+    stations = pd.read_csv(ctx.paths.stations_csv_path)
+    region = ctx.raw.plotting["region"]
+    output_path = Path(ctx.paths.hypodd_output_dir) / HYPODD_MAP_NAME
+    depth_min = catalog["DEPTH"].min()
+    depth_max = catalog["DEPTH"].max()
+    if depth_min == depth_max:
+        depth_max = depth_min + 1
+
+    pygmt.config(GMT_VERBOSE="q")
+    figure = pygmt.Figure()
+    pygmt.makecpt(cmap="gray", series=[-1000, 3000], truncate="0.4/1.0", continuous=True)
+    figure.grdimage(
+        grid=ctx.raw.plotting["gmt_grid_path"],
+        region=region,
+        projection="M6i",
+        shading="+a135+nt0.6",
+        cmap=True,
+        frame=["af", f'+t"{ctx.raw.plotting["map_title"]} (HypoDD)"'],
+    )
+    figure.coast(shorelines="1/0.25p,black", resolution="h")
+    pygmt.makecpt(cmap="viridis", series=[depth_min, depth_max], continuous=True)
+    figure.plot(
+        x=catalog["LON"],
+        y=catalog["LAT"],
+        style="c0.06c",
+        fill=catalog["DEPTH"],
+        cmap=True,
+        pen=False,
+        transparency=20,
+    )
+    figure.plot(
+        x=stations["longitude"],
+        y=stations["latitude"],
+        style="t0.25c",
+        fill="red",
+        pen="black",
+    )
+    figure.colorbar(position="JBC+o2.0c/1.4c+w8c/0.4c+h", frame='af+l"Depth (km)"')
+    figure.basemap(map_scale="jBL+o0.3c/-1.5c+w10k+f+l")
+    with figure.inset(position="jTR+w3.5c+o0.3c", box="+gwhite+p1p,black"):
+        figure.coast(
+            region=[8, 17, 40.5, 47],
+            projection="M3.5c",
+            land="gray85",
+            water="white",
+            shorelines="0.25p,black",
+        )
+        rectangle = [
+            [region[0], region[2]],
+            [region[1], region[2]],
+            [region[1], region[3]],
+            [region[0], region[3]],
+            [region[0], region[2]],
+        ]
+        figure.plot(data=rectangle, pen="1p,red")
+
+    figure.savefig(output_path, dpi=300)
+    print(f"HypoDD catalog map written to: {output_path}")
+
+
 def _prepare_run_dirs(ctx):
     ph2dt_input_dir = Path(ctx.paths.hypodd_ph2dt_input_path).parent
     ph2dt_output_dir = Path(ctx.paths.hypodd_run_dir)
@@ -604,6 +679,7 @@ def _run(ctx):
     _require_file(reloc_path, "HypoDD relocation output")
     _add_reloc_header(reloc_path)
     print(f"HypoDD relocation written to: {reloc_path}")
+    _plot_relocated_catalog(ctx, reloc_path)
 
 
 def run(ctx):

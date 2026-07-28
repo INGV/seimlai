@@ -429,7 +429,7 @@ def _process_event_pair(task):
                 debug_counts[sta]["below_threshold"] += 1
                 continue
             dt_cc = (tt1 - tt2) - shift
-            # Controllo di sicurezza: scarta valori non fisici.
+            # Safety check: discard non-physical values.
             if abs(dt_cc) > CC_MAX_ABS_DT_SECONDS:
                 debug_counts[sta]["invalid_dt"] += 1
                 warnings_out.append(

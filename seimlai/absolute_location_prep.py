@@ -37,15 +37,15 @@ def _load_filtered_inputs():
         if os.path.exists(legacy_pic):
             filepic = legacy_pic
 
-    # LETTURA FILE
-    df_catalogo = pd.read_csv(filecat)
+    # READ FILES
+    catalog_df = pd.read_csv(filecat)
     df_picks = pd.read_csv(filepic)
 
-    df_catalogo['time'] = pd.to_datetime(df_catalogo['time'])
-    df_catalogo = df_catalogo.sort_values('time')
+    catalog_df['time'] = pd.to_datetime(catalog_df['time'])
+    catalog_df = catalog_df.sort_values('time')
 
     df_picks['timestamp'] = pd.to_datetime(df_picks['timestamp'])
-    df_event_time = df_catalogo[['event_index', 'time']].copy()
+    df_event_time = catalog_df[['event_index', 'time']].copy()
     df_event_time.columns = ['event_idx', 'origin_time']
     df_picks = df_picks.merge(df_event_time, on='event_idx', how='left')
     df_picks = df_picks.sort_values(['origin_time', 'timestamp']).reset_index(drop=True)
@@ -55,13 +55,13 @@ def _load_filtered_inputs():
     grouped.columns.name = None
     grouped = grouped.rename(columns={'p': 'num_p', 's': 'num_s'})
 
-    eventi_validi = grouped[(grouped['num_p'] >= h71_min_p) & (grouped['num_s'] >= h71_min_s)].copy()
-    print(f"Number of filtered event: {len(eventi_validi)} on {df_picks['event_idx'].nunique()}")
+    valid_events = grouped[(grouped['num_p'] >= h71_min_p) & (grouped['num_s'] >= h71_min_s)].copy()
+    print(f"Number of filtered events: {len(valid_events)} out of {df_picks['event_idx'].nunique()}")
 
 
-    df_picks_filtrati = df_picks[df_picks['event_idx'].isin(eventi_validi.index)]
-    df_picks_filtrati = df_picks_filtrati.merge(eventi_validi, left_on='event_idx', right_index=True)
-    return df_catalogo, df_picks_filtrati
+    filtered_picks_df = df_picks[df_picks['event_idx'].isin(valid_events.index)]
+    filtered_picks_df = filtered_picks_df.merge(valid_events, left_on='event_idx', right_index=True)
+    return catalog_df, filtered_picks_df
 
 def format_time(time_str):
     dt = pd.to_datetime(time_str)
@@ -75,20 +75,20 @@ def format_time(time_str):
         sec = sec[1:]
     return year, month, day, hour, minute, sec
 
-def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
+def write_phs(filtered_picks_df, catalog_df, filtered_dir, filename="out.phs"):
     output_file = os.path.join(filtered_dir, filename)
 
     # --- Associate origin time and filtered picking ---
-    df_picks_filtrati = df_picks_filtrati.copy()
-    df_picks_filtrati["origin_time"] = df_picks_filtrati["event_idx"].map(
-        df_catalogo.set_index("event_index")["time"]
+    filtered_picks_df = filtered_picks_df.copy()
+    filtered_picks_df["origin_time"] = filtered_picks_df["event_idx"].map(
+        catalog_df.set_index("event_index")["time"]
     )
 
     # Sort
-    df_picks_filtrati = df_picks_filtrati.sort_values(["origin_time", "timestamp"])
+    filtered_picks_df = filtered_picks_df.sort_values(["origin_time", "timestamp"])
 
     with open(output_file, 'w') as f:
-        for event_id, group in df_picks_filtrati.groupby('event_idx', sort=False):
+        for event_id, group in filtered_picks_df.groupby('event_idx', sort=False):
             group = group.sort_values("timestamp")
             
             for station, station_df in group.groupby('id', sort=False):
@@ -108,16 +108,16 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
                 if not p_row.empty:
                     p_time = p_row.iloc[0]['timestamp']
                     prob_p = float(p_row.iloc[0]['prob'])
-                    is_fittizia = False
+                    is_fictitious = False
                 elif not s_row.empty:
                     s_time = pd.to_datetime(s_row.iloc[0]['timestamp']) 
                     p_time = (s_time - pd.Timedelta(seconds=5)).isoformat()
                     prob_p = -9.999999
-                    is_fittizia = True
+                    is_fictitious = True
                 else:
                     p_time = None
                     prob_p = -9.999999
-                    is_fittizia = True
+                    is_fictitious = True
 
                 if p_time is not None:
                     p_dt = pd.to_datetime(p_time)
@@ -131,7 +131,7 @@ def write_phs(df_picks_filtrati, df_catalogo, filtered_dir, filename="out.phs"):
                     row[17:19] = list(mi)
                     sec = f"{float(s):5.2f}".rjust(5)
                     row[19:24] = list(sec)
-                    if is_fittizia:
+                    if is_fictitious:
                         row[81:89] = list(f"{-9.999999:8.6f}")
                     else:
                         row[82:90] = list(f"{prob_p:8.6f}")
@@ -173,21 +173,21 @@ def format_hypo71_coords(value, is_lat=True):
     min_str = f"{minutes:.2f}".rjust(5) if minutes < 10 else f"{minutes:05.2f}"
     return f"{degrees}{hemi}{min_str}"
 
-def write_h71_file(df_catalogo, df_picks_filtrati, output_path):
-    event_ids = df_picks_filtrati['event_idx'].unique()
+def write_h71_file(catalog_df, filtered_picks_df, output_path):
+    event_ids = filtered_picks_df['event_idx'].unique()
     
     # Sort catalog using origin time
-    df_filt = df_catalogo[df_catalogo['event_index'].isin(event_ids)].copy()
-    df_filt["time"] = pd.to_datetime(df_filt["time"])
-    df_filt = df_filt.sort_values("time")
+    filtered_catalog_df = catalog_df[catalog_df['event_index'].isin(event_ids)].copy()
+    filtered_catalog_df["time"] = pd.to_datetime(filtered_catalog_df["time"])
+    filtered_catalog_df = filtered_catalog_df.sort_values("time")
 
     with open(output_path, "w") as f:
         row = [' '] * 60
-        num_eventi = f"{len(df_filt):>10}"[:10]
-        row[9:18] = list(num_eventi)
+        event_count = f"{len(filtered_catalog_df):>10}"[:10]
+        row[9:18] = list(event_count)
         f.write("".join(row) + "\n") 
 
-        for _, ev in df_filt.iterrows():
+        for _, ev in filtered_catalog_df.iterrows():
             row = [' '] * 60
 
             dt = pd.to_datetime(ev["time"])
@@ -239,12 +239,12 @@ def prob_to_weight(prob_str):
     except:
         return ''
 
-def converti_phs_file(file_input, file_output, debug=False):
+def convert_phs_file(file_input, file_output, debug=False):
     event_id = 1
 
     with open(file_input, 'r') as fin, open(file_output, 'w') as fout:
-        for idx, linea in enumerate(fin):
-            original = linea.rstrip('\n')
+        for idx, input_line in enumerate(fin):
+            original = input_line.rstrip('\n')
 
             if original.strip() == '':
                 fout.write('\n')
@@ -252,12 +252,12 @@ def converti_phs_file(file_input, file_output, debug=False):
 
             is_separator = original.strip().startswith("10") or original[0:10].strip() == ''
             line = original.ljust(113)
-            linea_out = list(line)
+            output_line = list(line)
 
-            fase_p = line[4:6]
-            fase_s = line[36:38]
-            tempo_p = line[9:24].strip()
-            tempo_s = line[31:36].strip()
+            phase_p = line[4:6]
+            phase_s = line[36:38]
+            time_p = line[9:24].strip()
+            time_s = line[31:36].strip()
             
             prob_p_full = line[81:90].strip()
             if prob_p_full.startswith('-9'): 
@@ -267,24 +267,24 @@ def converti_phs_file(file_input, file_output, debug=False):
 
             prob_s = line[92:100].strip()
 
-            peso_p = prob_to_weight(prob_p) if tempo_p != '' else ''
-            peso_s = prob_to_weight(prob_s) if tempo_s != '' else ''
+            weight_p = prob_to_weight(prob_p) if time_p != '' else ''
+            weight_s = prob_to_weight(prob_s) if time_s != '' else ''
 
-            if fase_p == 'EP' and peso_p != '':
-                linea_out[7] = peso_p
-            if fase_s == 'ES' and peso_s != '':
-                linea_out[39] = peso_s
+            if phase_p == 'EP' and weight_p != '':
+                output_line[7] = weight_p
+            if phase_s == 'ES' and weight_s != '':
+                output_line[39] = weight_s
 
             if not is_separator:
                 id_str = f"{event_id:6d}"
-                linea_out[107:113] = list(id_str)
+                output_line[107:113] = list(id_str)
             else:
                 event_id += 1 
 
             if debug and idx < 10:
-                print(f"[DEBUG] Line {idx:03d} | P={prob_p} -> {peso_p} | S={prob_s} -> {peso_s}")
+                print(f"[DEBUG] Line {idx:03d} | P={prob_p} -> {weight_p} | S={prob_s} -> {weight_s}")
 
-            fout.write(''.join(linea_out).rstrip() + '\n')
+            fout.write(''.join(output_line).rstrip() + '\n')
 
 def convert_h71_ids(input_path):
     with open(input_path, "r") as f:
@@ -312,7 +312,7 @@ def convert_h71_ids(input_path):
     with open(output_path, "w") as f_out:
         f_out.writelines(output_lines)
 
-    print(f"File H71 update saved in: {output_path}")
+    print(f"Updated H71 file saved in: {output_path}")
 
 def dec_to_degmin(dec_deg, is_lat=True):
     """
@@ -382,16 +382,16 @@ def convert_station_file_for_hypoellipse():
 def run(ctx):
     ensure_initial_directories(ctx)
     _apply_context(ctx)
-    df_catalogo, df_picks_filtrati = _load_filtered_inputs()
+    catalog_df, filtered_picks_df = _load_filtered_inputs()
 
-    write_phs(df_picks_filtrati, df_catalogo, h71_filtered_dir)
+    write_phs(filtered_picks_df, catalog_df, h71_filtered_dir)
 
     output_h71 = os.path.join(h71_filtered_dir, "out.h71")
-    write_h71_file(df_catalogo, df_picks_filtrati, output_h71)
+    write_h71_file(catalog_df, filtered_picks_df, output_h71)
 
     phs_input = os.path.join(h71_filtered_dir, "out.phs")
     phs_output = os.path.join(h71_filtered_dir, "out_conv.phs")
-    converti_phs_file(phs_input, phs_output, debug=False)
+    convert_phs_file(phs_input, phs_output, debug=False)
 
     convert_h71_ids(os.path.join(h71_filtered_dir, "out.h71"))
     convert_station_file_for_hypoellipse()

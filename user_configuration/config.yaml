@@ -1,6 +1,6 @@
 case_study:
   name: amatrice_catalog #name of the case study folder
-  personal_folder: null # if you have a waveforms metadata in a personal folder specify the path, otherwise put null
+  personal_folder: null # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
   download_data: true # if you want to download the data put true, otherwise put false
 
 geography: #specify the area limits
@@ -10,8 +10,8 @@ geography: #specify the area limits
   maxlongitude: 14.00
 
 dates: #specify the time window
-  starttime: "2016-12-31"
-  endtime: "2017-01-01"
+  starttime: "2016-10-29"
+  endtime: "2016-10-31"
 
 stations: # specify station information
   network: "*" # put "*" to download all networks
@@ -25,7 +25,7 @@ stations: # specify station information
 model:
   neural_network: PhaseNet #define deep-learing algorithm available on Seisbench
   model_type: original #define a pretrained-model available on Seisbench
-  custom_model_path: null #if you have a pytorch file (.pth) specity the personal path, otherwise put null
+  custom_model_path: null #if you have a PyTorch file (.pth), specify its path; otherwise use null
   batch_size: 256 #size of data batches to be processed waveforms
   p_threshold: 0.8 #threshold decision for P-wave
   s_threshold: 0.8 #threshold decision for P-wave
@@ -34,6 +34,8 @@ model:
 phase_picking:
   num_workers_cpu_mps: 2 # number of cpu cores to be used for multiprocessing
   slurm_cpus_default: 4 # number of cpu cores to be used for slurm
+  bandpass_freq_min: 0.5 # minimum frequency of the band-pass filter in Hz
+  bandpass_freq_max: 30.0 # maximum frequency of the band-pass filter in Hz
 
 # 04_association.py #phase association setting
 gamma:
@@ -52,7 +54,7 @@ gamma:
   z_km:
     - 0
     - 60
-  velocity: #Definte P- and S- wave velocities in km/s
+  velocity: #Define P- and S-wave velocities in km/s
     p: 7.0
     s: 4.0
   method: BGMM #Bayesian Gaussian Mixture Model (BGMM) or simple clustering (Dbscan)
@@ -81,7 +83,7 @@ gamma:
 
 # gamma-analysis optional command
 analysis:
-  log_filename: analisi_picking.log #name of the log file after phase picking
+  log_filename: picking_analysis.log #name of the log file after phase picking
 
 # plot-catalog optional command
 plotting:
@@ -106,7 +108,7 @@ hypoellipse_check:
 
 # 07_location_filtering.py and 08_relative_relocation.py
 dd:
-  max_gap: 180.0 #maximum azimutal gap in degrees
+  max_gap: 180.0 #maximum azimuthal gap in degrees
   max_rms: 0.4 #maximum root mean square
   max_erh: 0.8 #maximum horizontal error
   max_erz: 0.8 #maximum vertical error
@@ -117,7 +119,7 @@ hypodd:
   docker_start_timeout_seconds: 90 #docker start timeout in seconds
   dimensions:
     mode: auto #auto or manual to create the hypodd.inc file. Put manual if you want to specify the problem dimensions
-    # The description of the followed parameters are defined in hypoDD.inp file
+    # The following parameters are described in the hypoDD.inp file
     maxeve0: 1
     maxlay: 14
     maxcl: 30
@@ -129,7 +131,7 @@ hypodd:
     min_links: 8 #minimum number of links
     min_observations: 1 #minimum number of observations
     max_observations: 100 #maximum number of observations
-  relocation: # #parameters for hypoDD.inp file (see HypoDD documentation)
+  relocation: #parameters for hypoDD.inp file (see HypoDD documentation)
     idat: 3
     ipha: 3
     max_dist_km: 120.0

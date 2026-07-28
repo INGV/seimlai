@@ -15,8 +15,8 @@ def run(ctx):
 
     # Input file name built from config variables
     date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
-    nome_file_input = f"gamma_pick_{date_tag_val}.csv"
-    input_file_path = os.path.join(output_dir, nome_file_input)
+    input_filename = f"gamma_pick_{date_tag_val}.csv"
+    input_file_path = os.path.join(output_dir, input_filename)
     if not os.path.exists(input_file_path):
         legacy_path = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
         if os.path.exists(legacy_path):
@@ -55,7 +55,7 @@ def run(ctx):
         print("Computations completed.")
 
         with open(log_file_path, 'w', encoding='utf-8') as f:
-            f.write(f"File anaylis: {input_file_path}\n\n")
+            f.write(f"File analysis: {input_file_path}\n\n")
             
             f.write("--- TOTAL COUNTS ---\n")
             f.write(f"P-wave total: {total_p}\n")

@@ -129,7 +129,7 @@ def run(ctx):
 
     # === Open log file & Lock ===
     log_file = open(download_log_path, "w")
-    # Il lock serve a evitare che due processi scrivano nel file nello stesso istante
+    # The lock prevents two processes from writing to the file at the same time
     io_lock = threading.Lock()
 
     # === MAIN EXECUTION ===

@@ -90,7 +90,7 @@ def run(ctx):
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
     if "Amp" not in picks_df.columns and "Amplitude" in picks_df.columns:
         picks_df = picks_df.rename(columns={"Amplitude": "Amp"})
-    # Estract nework and station name
+    # Extract network and station name
     # Extract station name from dot-notation if present (e.g. "IV.INTR." -> "INTR")
     # If names are already clean (e.g. "ED01"), leave them as-is
     if picks_df["Station"].str.contains(r"\.").any():
@@ -156,20 +156,20 @@ def run(ctx):
         pick_df = pick_df.reset_index()   
     missing_picks = set(pick_df.index) - set(assignments["pick_idx"])
     if missing_picks:
-        print(f"Warning {len(missing_picks)} pick_idx not find in assignments!")  
+        print(f"Warning: {len(missing_picks)} pick_idx values were not found in assignments!")
     picks_with_events = pick_df.merge(assignments, left_index=True, right_on="pick_idx", how="left")
     picks_with_events["event_idx"] = picks_with_events["event_idx"].fillna(-1).astype(int)  
     picks_with_events = picks_with_events.merge(catalog, left_on="event_idx", right_on="event_index", how="left") 
     missing_events = set(picks_with_events["event_idx"]) - set(catalog["event_index"])
     if missing_events:
-        print(f"Warning: {len(missing_events)} event_idx not match into the catalog!")
+        print(f"Warning: {len(missing_events)} event_idx values do not match the catalog!")
     picks_with_events.drop(columns=["event_index"], inplace=True, errors="ignore")
     picks_with_events = picks_with_events[["id", "timestamp", "prob", "amp", "type", "event_idx", "prob_gamma"]]
     # Save all picks (the id .-1 is referred to un-associated picks)
     output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{date_tag_val}.csv")
     picks_with_events.to_csv(output_gamma_picks, index=False)
     
-    print(f"Picks save in {output_gamma_picks}!")
+    print(f"Picks saved in {output_gamma_picks}!")
     
     # --------------------------------------
     # Save only associated picks
@@ -189,12 +189,12 @@ def run(ctx):
     catalog["longitude"] = [coord[0] for coord in lon_lat]
     catalog["latitude"] = [coord[1] for coord in lon_lat]
     
-    # Delate km coordinate from dataframe and put the degree coordinate.
+    # Replace kilometre coordinates with geographic coordinates.
     catalog = catalog.drop(columns=[x_col, y_col])
     catalog_file=os.path.join(output_dir, f"seismic_catalog_with_latlon_{date_tag_val}.csv")
     #Save catalog with correct coordinates
     catalog.to_csv(catalog_file, index=False)
-    print("Seismic catalog saved in seismic_catalog_with_latlon.csv con solo longitude e latitude.")
+    print("Seismic catalog saved in seismic_catalog_with_latlon.csv with longitude and latitude only.")
     
     # Use PyGMT to plot the seismicity
     pygmt.config(GMT_VERBOSE="q")
@@ -260,7 +260,7 @@ def run(ctx):
     
     # 10. Topography colorbar (top right) — [commented out]
     #fig.colorbar(
-    #    position="JTR+o-1.8c/0c+w0.3c/3c+v",  # verticale
+    #    position="JTR+o-1.8c/0c+w0.3c/3c+v",  # vertical
     #    frame='af+l"Elevation (m)"'
     #)
     
@@ -288,9 +288,6 @@ def run(ctx):
     # Save plot 
     output_file = os.path.join(output_dir, f"catalog_{date_tag_val}.pdf")
     fig.savefig(output_file, dpi=300)
-    legacy_output_file = os.path.join(output_dir, f"catalog_{year}_{start_day}_{end_day}.pdf")
-    if legacy_output_file != output_file:
-        fig.savefig(legacy_output_file, dpi=300)
     
     # Show the plot
     fig.show()

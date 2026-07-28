@@ -6,7 +6,7 @@ Create 'location-1D.quality' from Hypoellipse 'location-1D.out'.
 Output columns (order):
 IPOSTRINGA LAT LON DEPTH N_P N_S RMS_HE RMS_W RMS_UW SEH SEZ GAP
 
-Nota: N_P e N_S escludono i pick con peso = 3 (subito dopo EP/ES).
+Note: N_P and N_S exclude picks with weight = 3 (immediately after EP/ES).
 """
 import sys, re, math
 from pathlib import Path
@@ -88,7 +88,7 @@ def parse_events(lines):
             info = parse_summary_line(lines[j])
             
             if not info:
-                print(f"ATTENTION: Event canceled. Row index: {j}. Summary line failed:'{lines[j].strip()}'", file=sys.stderr)
+                print(f"WARNING: Event discarded. Row index: {j}. Could not parse summary line: '{lines[j].strip()}'", file=sys.stderr)
                 i = j + 1
                 continue
             ipostringa = f'{info["date"]}_{info["HH"]:02d}{info["MM"]:02d}{int(info["SSf"]):02d}{(info["SSf"]-int(info["SSf"])):.2f}'.replace("0.", ".")

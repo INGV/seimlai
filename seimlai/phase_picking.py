@@ -180,6 +180,8 @@ def process_station_worker(args):
     BATCH_SIZE = worker_globals["BATCH_SIZE"]
     P_THRESHOLD = worker_globals["P_THRESHOLD"]
     S_THRESHOLD = worker_globals["S_THRESHOLD"]
+    bandpass_freq_min = worker_globals["PHASE_BANDPASS_FREQ_MIN"]
+    bandpass_freq_max = worker_globals["PHASE_BANDPASS_FREQ_MAX"]
     model = worker_globals["model"]
     model_device = next(model.parameters()).device
     expected_device, _ = ctx.device
@@ -232,7 +234,7 @@ def process_station_worker(args):
                         if file_year == year and file_day == day:
                             stream += read(os.path.join(full_path, fname))
                 except Exception as e:
-                    logs.append(f"[{net}.{stat}] Errore lettura {fname}: {e}")
+                    logs.append(f"[{net}.{stat}] Error reading {fname}: {e}")
 
     if len(stream) == 0:
         return pd.DataFrame(), logs
@@ -242,11 +244,11 @@ def process_station_worker(args):
         # Let's measure the total length of the data without filling in the gaps with zeros.
         t_start = min(tr.stats.starttime for tr in stream)
         t_end = max(tr.stats.endtime for tr in stream)
-        durata_ore = (t_end - t_start) / 3600.0
+        duration_hours = (t_end - t_start) / 3600.0
 
         # Let's set a generous "survival" limit (48 hours) to handle very large files that span midnight
-        if durata_ore > 48.0:
-            logs.append(f"[{net}.{stat}] SKIP: (Duration: {durata_ore:.1f}h). Risk of OOM!")
+        if duration_hours > 48.0:
+            logs.append(f"[{net}.{stat}] SKIP: (Duration: {duration_hours:.1f}h). Risk of OOM!")
             return pd.DataFrame(), logs
         
     except Exception as e:
@@ -257,8 +259,8 @@ def process_station_worker(args):
     stream_pick = preprocess_stream_for_picking(
         stream,
         logs,
-        fmin=0.5,
-        fmax=30.0,
+        fmin=bandpass_freq_min,
+        fmax=bandpass_freq_max,
         min_duration_sec=30.0,
     )
 
@@ -276,19 +278,19 @@ def process_station_worker(args):
         if len(stream_amp) == 0:
             logs.append(f"[{net}.{stat}] Warning: stream_amp empty. Amplitudes will be NaN.")
 
-        xml_reale = None
-        cartella_xml = os.path.dirname(inv_path)
-        nome_esatto_xml = f"{net}.{stat}.xml" 
+        actual_xml = None
+        xml_directory = os.path.dirname(inv_path)
+        expected_xml_name = f"{net}.{stat}.xml" 
 
-        if len(stream_amp) > 0 and os.path.exists(cartella_xml):
-            for f in os.listdir(cartella_xml):
-                if f == nome_esatto_xml:
-                    xml_reale = os.path.join(cartella_xml, f)
+        if len(stream_amp) > 0 and os.path.exists(xml_directory):
+            for f in os.listdir(xml_directory):
+                if f == expected_xml_name:
+                    actual_xml = os.path.join(xml_directory, f)
                     break
 
-        if len(stream_amp) > 0 and xml_reale is not None:
+        if len(stream_amp) > 0 and actual_xml is not None:
             from obspy import read_inventory
-            inv = read_inventory(xml_reale)
+            inv = read_inventory(actual_xml)
 
             original_channels = []
             for tr in stream_amp:
@@ -303,23 +305,23 @@ def process_station_worker(args):
                         tr.stats.channel = fallback[0]
 
             pre_filt = [0.1, 0.5, 30.0, 40.0]
-            nome_file_trovato = os.path.basename(xml_reale)
+            found_filename = os.path.basename(actual_xml)
             try:
                 stream_amp.remove_response(inventory=inv, output="VEL", pre_filt=pre_filt, water_level=60)
 
-                print(f"[XML] {net}.{stat} -> file ({nome_file_trovato}) | Converted in VEL (m/s)", flush=True)
+                print(f"[XML] {net}.{stat} -> file ({found_filename}) | Converted in VEL (m/s)", flush=True)
 
             except Exception as e:
                 logs.append(f"[{net}.{stat}] Error remove_response: {e}.")
-                print(f"[XML] {net}.{stat} -> file ({nome_file_trovato}), but Error | Kept in Counts", flush=True)
+                print(f"[XML] {net}.{stat} -> file ({found_filename}) | Conversion failed; kept in counts", flush=True)
 
             for i, tr in enumerate(stream_amp):
                 tr.stats.channel = original_channels[i]
 
         elif len(stream_amp) > 0:
-            logs.append(f"[{net}.{stat}] Warning: XML {nome_esatto_xml} not found in {cartella_xml}. Amplitude in Counts.")
-            # STAMPA LIVE: FILE MANCANTE
-            print(f" [XML] {net}.{stat} -> {nome_esatto_xml} NOT FOUND | Kept in Counts", flush=True)
+            logs.append(f"[{net}.{stat}] Warning: XML {expected_xml_name} not found in {xml_directory}. Amplitude in Counts.")
+            # LIVE OUTPUT: MISSING FILE
+            print(f" [XML] {net}.{stat} -> {expected_xml_name} NOT FOUND | Kept in Counts", flush=True)
 
         classified = model.classify(stream_pick, batch_size=BATCH_SIZE, P_threshold=P_THRESHOLD, S_threshold=S_THRESHOLD)
         outputs = classified.picks
@@ -341,7 +343,7 @@ def process_station_worker(args):
         logs.append(f"[{net}.{stat}] completed. Found {len(pick_df_list)} picks.")
 
     except Exception as e:
-        logs.append(f"[{net}.{stat}] fatal Error {e}")
+        logs.append(f"[{net}.{stat}] Fatal error: {e}")
 
     del stream, stream_pick, stream_amp
     if classified is not None: del classified, outputs
@@ -509,7 +511,7 @@ def sort_seismic_picking(df, output_file, starttime=None, endtime=None):
     # Save sorted picks into a new csv file
     df_sorted.to_csv(output_file, index=False)
 
-    print(f"File ordinato salvato come: {output_file}")
+    print(f"Sorted file saved as: {output_file}")
 
 
 def run_sort_picks(ctx):

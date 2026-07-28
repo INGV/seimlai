@@ -4,7 +4,11 @@
 
 # SeiMLAI: SEIsmic catalog for Machine Learning And Imaging
 
+<<<<<<< Updated upstream
 **SeiMLAI** is a Python workflow that allows you to obtain a **high-resolution seismic catalog** by leveraging known infrastructure and using new machine-learning algorithms for P- and S-wave picking (Zhu and Beroza, 2019; Mousavi et al., 2020) and phase association (Zhu et al., 2022). After downloading the waveforms for a specific period and area, the waveforms are organised into an archive, and the arrival times of the P- and S-phases are picked. The workflow allows the use of either a pre-trained model, a different deep-learning picker or a user-created model. Once the creation of an archive containing the continuous waveform recorded by a seismic stations, they are employed to create an initial catalogue that can be viewed for the first time. The workflow also offers **accurate post-processing steps** for raw data from machine learning, providing input files for both absolute and relative locations at the end of the workflow that are run using a Docker container (Merkel, 2014).
+=======
+**SeiMLAI** is a Python workflow for producing a **high-resolution seismic catalog** using established infrastructure and machine-learning algorithms for P- and S-wave picking (Zhu and Beroza, 2019; Mousavi et al., 2020) and phase association (Zhu et al., 2022). It downloads waveforms for a specified period and area, organises them into an archive, and picks P- and S-phase arrival times. The workflow supports pretrained models, alternative deep-learning pickers, and user-created models. It builds an initial catalog from continuous waveforms recorded by seismic stations and provides post-processing steps and input files for absolute and relative location programs run in Docker containers.
+>>>>>>> Stashed changes
 
 The product package includes the existing Seisbench (Woollam et al., 2022) and PyGMT (Tian et al., 2026) libraries for seismic data analysis using machine learning and for the preliminary visualization of the resulting catalog, respectively.
 
@@ -293,8 +297,8 @@ the relevant publications when using this workflow.
 If you use **SeiMLAI** in your research, please cite:
 
 > Fonzetti R., Crocetta A., and Bailo D., (year)
-> Istituto Nazionale di Geofisica e Vulanologia (INGV), Rome, Italy
-> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*. **Nome della rivista**, volume(numero), pagine.  
+> National Institute of Geophysics and Volcanology (INGV), Rome, Italy
+> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*. **Journal name**, volume(issue), pages.
 > https://doi.org/xxxxx
 
 ## License
@@ -308,7 +312,7 @@ Individual software packages, data services, waveform data, station metadata and
 ## Contact
 
 **Corresponding author:** [Rossella Fonzetti]  
-[Istituto Nazionale di Geofisica e Vulanologia (INGV), Rome, Italy]  
+[National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
 [Email](mailto:rossella.fonzetti@ingv.it)
 
 For questions, bug reports, or collaborations related to SeiMLAI, please contact

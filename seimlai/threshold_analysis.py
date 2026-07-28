@@ -53,12 +53,12 @@ def parse_folder_data(folder_suffix, thr_value):
         with open(log_path, 'r') as f:
             content = f.read()
             try:
-                data['P_TOT'] = int(re.search(r"Onde P totali:\s+(\d+)", content).group(1))
-                data['S_TOT'] = int(re.search(r"Onde S totali:\s+(\d+)", content).group(1))
-                data['P_NO_GAMMA'] = int(re.search(r"Onde P non associate:\s+(\d+)", content).group(1))
-                data['S_NO_GAMMA'] = int(re.search(r"Onde S non associate:\s+(\d+)", content).group(1))
-                data['P_GAMMA'] = int(re.search(r"Onde P associate:\s+(\d+)", content).group(1))
-                data['S_GAMMA'] = int(re.search(r"Onde S associate:\s+(\d+)", content).group(1))
+                data['P_TOT'] = int(re.search(r"P-wave total:\s+(\d+)", content).group(1))
+                data['S_TOT'] = int(re.search(r"S-wave total:\s+(\d+)", content).group(1))
+                data['P_NO_GAMMA'] = int(re.search(r"Unassociated P-wave:\s+(\d+)", content).group(1))
+                data['S_NO_GAMMA'] = int(re.search(r"Unassociated S-wave:\s+(\d+)", content).group(1))
+                data['P_GAMMA'] = int(re.search(r"Associated P-wave:\s+(\d+)", content).group(1))
+                data['S_GAMMA'] = int(re.search(r"Associated S-wave:\s+(\d+)", content).group(1))
             except (AttributeError, ValueError):
                 print(f"Error parsing log in: {folder_name}")
                 return None

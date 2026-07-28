@@ -100,7 +100,7 @@ def run(ctx):
     if legacy_pdf != output_pdf:
         fig.savefig(legacy_pdf, dpi=300)
     fig.show()
-    print(f"Mappa salvata in: {output_pdf}")
+    print(f"Map saved to: {output_pdf}")
 
 
 def main():
