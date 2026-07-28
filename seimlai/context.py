@@ -74,6 +74,10 @@ class Paths:
 class DerivedConfig:
     start_day: int
     end_day: int
+    start_day_str: str
+    end_day_str: str
+    year: str
+    date_tag: str
     thr: str
     gamma_config: dict[str, Any]
 
@@ -188,7 +192,7 @@ class RuntimeContext:
             "maxlongitude": self.raw.geography["maxlongitude"],
             "starttime": self.starttime,
             "endtime": self.endtime,
-            "year": self.raw.dates["year"],
+            "year": self.derived.year,
             "network": self.raw.stations["network"],
             "channel": self.raw.stations["channel"],
             "stations_list": self.raw.stations["stations_list"],
@@ -199,11 +203,15 @@ class RuntimeContext:
             "BATCH_SIZE": model_cfg["batch_size"],
             "P_THRESHOLD": model_cfg["p_threshold"],
             "S_THRESHOLD": model_cfg["s_threshold"],
-            "WLENGTH_SECONDS": model_cfg["wlength_seconds"],
             "PHASE_NUM_WORKERS_CPU_MPS": phase_picking_cfg["num_workers_cpu_mps"],
             "PHASE_SLURM_CPUS_DEFAULT": phase_picking_cfg["slurm_cpus_default"],
+            "PHASE_BANDPASS_FREQ_MIN": phase_picking_cfg["bandpass_freq_min"],
+            "PHASE_BANDPASS_FREQ_MAX": phase_picking_cfg["bandpass_freq_max"],
             "start_day": self.derived.start_day,
             "end_day": self.derived.end_day,
+            "start_day_str": self.derived.start_day_str,
+            "end_day_str": self.derived.end_day_str,
+            "date_tag": self.derived.date_tag,
             "THR": self.derived.thr,
             "config": self.derived.gamma_config,
             "analysis_log_filename": self.raw.analysis["log_filename"],
@@ -229,6 +237,7 @@ class RuntimeContext:
             "CC_NETWORK": cc_dd_cfg["network"],
             "CC_WORKER_COUNT": cc_dd_cfg["worker_count"],
             "CC_CHUNK_SIZE": cc_dd_cfg["chunk_size"],
+            "CC_MIN_READINGS_PER_PAIR": cc_dd_cfg["min_readings_per_pair"],
             "CC_P_CHANNEL": cc_dd_cfg["p_channel"],
             "CC_S_CHANNEL": cc_dd_cfg["s_channel"],
             "CC_MAX_ABS_DT_SECONDS": cc_dd_cfg["max_abs_dt_seconds"],
@@ -309,10 +318,10 @@ def validate_config(raw: dict[str, Any]) -> None:
     required = {
         "case_study": ["name", "personal_folder", "download_data"],
         "geography": ["minlatitude", "maxlatitude", "minlongitude", "maxlongitude"],
-        "dates": ["starttime", "endtime", "year"],
+        "dates": ["starttime", "endtime"],
         "stations": ["network", "channel", "stations_list", "fdsn_clients"],
-        "model": ["neural_network", "model_type", "custom_model_path", "batch_size", "p_threshold", "s_threshold", "wlength_seconds"],
-        "phase_picking": ["num_workers_cpu_mps", "slurm_cpus_default"],
+        "model": ["neural_network", "model_type", "custom_model_path", "batch_size", "p_threshold", "s_threshold"],
+        "phase_picking": ["num_workers_cpu_mps", "slurm_cpus_default", "bandpass_freq_min", "bandpass_freq_max"],
         "gamma": ["dims", "use_dbscan", "use_amplitude", "x_km", "y_km", "z_km", "velocity", "method", "dbscan_eps", "dbscan_min_samples", "eikonal", "filtering"],
         "analysis": ["log_filename"],
         "plotting": ["gmt_library_path", "gmt_grid_path", "region", "map_title"],
@@ -320,7 +329,7 @@ def validate_config(raw: dict[str, Any]) -> None:
         "hypoellipse_check": ["docker_image", "docker_start_timeout_seconds"],
         "dd": ["max_gap", "max_rms", "max_erh", "max_erz"],
         "hypodd": ["docker_image", "docker_start_timeout_seconds", "dimensions", "ph2dt", "relocation", "velocity_model"],
-        "cc_dd": ["use_gpu", "gpu_batch_size", "max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "p_channel", "s_channel", "max_abs_dt_seconds"],
+        "cc_dd": ["use_gpu", "gpu_batch_size", "max_dist_km_cc", "cc_threshold", "win_before", "win_after", "cc_max_lag", "freq_min", "freq_max", "network", "worker_count", "chunk_size", "min_readings_per_pair", "p_channel", "s_channel", "max_abs_dt_seconds"],
         "threshold_analysis": ["dpi", "thresholds_map"],
     }
     missing = []
@@ -365,6 +374,19 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
 
     starttime = UTCDateTime(raw.dates["starttime"])
     endtime = UTCDateTime(raw.dates["endtime"])
+
+    start_year = starttime.year
+    end_year = endtime.year
+    if start_year == end_year:
+        year_str = str(start_year)
+        date_tag = f"{start_year}_{starttime.julday:03d}_{endtime.julday:03d}"
+    else:
+        year_str = f"{start_year}-{end_year}"
+        date_tag = f"{start_year}_{starttime.julday:03d}_{end_year}_{endtime.julday:03d}"
+
+    start_day_str = f"{starttime.julday:03d}"
+    end_day_str = f"{endtime.julday:03d}"
+
     p_threshold = raw.model["p_threshold"]
     s_threshold = raw.model["s_threshold"]
     thr = f"{int(p_threshold * 10):02d}-{int(s_threshold * 10):02d}"
@@ -393,7 +415,7 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
         archive_dir=archive_dir,
         root_dir=archive_dir / "waveforms",
         inventory_dir=archive_dir / "inventory",
-        waveform_base=archive_dir / "waveforms" / str(raw.dates["year"]),
+        waveform_base=archive_dir / "waveforms" / year_str,
         output_base=output_base,
         threshold_dir=threshold_dir,
         threshold_comparison_dir=threshold_comparison_dir,
@@ -424,7 +446,7 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
         hypodd_ph2dt_input_path=dd_dir / "ph2dt.inp",
         hypodd_input_path=hypodd_input_dir / "hypoDD.inp",
         hypodd_reloc_path=hypodd_output_dir / "hypoDD.reloc",
-        csv_filename_12=f"seismic_catalog_with_latlon_{raw.dates['year']}_{starttime.julday:03d}_{endtime.julday:03d}.csv",
+        csv_filename_12=f"seismic_catalog_with_latlon_{date_tag}.csv",
         output_bar_path_12=threshold_comparison_dir / "grouped_bar_charts.pdf",
         output_line_path_12=threshold_comparison_dir / "line_charts_vs_THR.pdf",
         station_file_name=station_file_name,
@@ -434,6 +456,10 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
     derived = DerivedConfig(
         start_day=starttime.julday,
         end_day=endtime.julday,
+        start_day_str=start_day_str,
+        end_day_str=end_day_str,
+        year=year_str,
+        date_tag=date_tag,
         thr=thr,
         gamma_config=gamma_config,
     )

@@ -1,50 +1,50 @@
 case_study:
-  name: layout_test
-  personal_folder: null
-  download_data: true
+  name: amatrice_catalog #name of the case study folder
+  personal_folder: null # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
+  download_data: true # if you want to download the data put true, otherwise put false
 
-geography:
+geography: #specify the area limits
   minlatitude: 42.25
   maxlatitude: 43.12
   minlongitude: 11.75
   maxlongitude: 14.00
 
-dates:
-  starttime: "2016-10-30"
-  endtime: "2016-10-30"
-  year: "2016-2017"
+dates: #specify the time window
+  starttime: "2016-10-29"
+  endtime: "2016-10-31"
 
-stations:
-  network: "*"
-  channel: "BH?,HH?,EH?"
-  stations_list: "*"
-  fdsn_clients:
+stations: # specify station information
+  network: "*" # put "*" to download all networks
+  channel: "BH?,HH?,EH?" #all channel types
+  stations_list: "*" # put "*" to download all stations
+  fdsn_clients: #specify the clients. In the example multiple clients are specified
     - IRIS
     - INGV
 
-# 03_phase_picking.py - neural model settings
+# 03_phase_picking.py - phase picking settings
 model:
-  neural_network: PhaseNet
-  model_type: original
-  custom_model_path: null
-  batch_size: 256
-  p_threshold: 0.8
-  s_threshold: 0.8
-  wlength_seconds: 900
+  neural_network: PhaseNet #define deep-learing algorithm available on Seisbench
+  model_type: original #define a pretrained-model available on Seisbench
+  custom_model_path: null #if you have a PyTorch file (.pth), specify its path; otherwise use null
+  batch_size: 256 #size of data batches to be processed waveforms
+  p_threshold: 0.8 #threshold decision for P-wave
+  s_threshold: 0.8 #threshold decision for P-wave
 
 # 03_phase_picking.py - runtime settings
 phase_picking:
-  num_workers_cpu_mps: 2
-  slurm_cpus_default: 4
+  num_workers_cpu_mps: 2 # number of cpu cores to be used for multiprocessing
+  slurm_cpus_default: 4 # number of cpu cores to be used for slurm
+  bandpass_freq_min: 0.5 # minimum frequency of the band-pass filter in Hz
+  bandpass_freq_max: 30.0 # maximum frequency of the band-pass filter in Hz
 
-# 04_association.py
+# 04_association.py #phase association setting
 gamma:
-  dims:
+  dims: #define the dimensions of the volume in which we search for events (UTM coordinates)
     - x(km)
     - y(km)
     - z(km)
-  use_dbscan: true
-  use_amplitude: true
+  use_dbscan: true #activate dbscan
+  use_amplitude: true #if you want to compute amplitude, put true
   x_km:
     - 230
     - 620
@@ -54,42 +54,42 @@ gamma:
   z_km:
     - 0
     - 60
-  velocity:
+  velocity: #Define P- and S-wave velocities in km/s
     p: 7.0
     s: 4.0
-  method: BGMM
-  dbscan_eps: 25
-  dbscan_min_samples: 3
-  eikonal:
-    z:
+  method: BGMM #Bayesian Gaussian Mixture Model (BGMM) or simple clustering (Dbscan)
+  dbscan_eps: 25 #Cluster radius (distance in km)
+  dbscan_min_samples: 3 #Minimum number of points to form a cluster
+  eikonal: #Eikonal model parameters
+    z: #Depth of the layers in km
       - 0.0
       - 5.5
       - 16.0
       - 32.0
-    p:
+    p: #P-wave velocities in km/s
       - 5.5
       - 5.5
       - 6.7
       - 7.8
-    vp_vs_ratio: 1.73
-    h: 1.0
+    vp_vs_ratio: 1.73 #vp/vs ratio
+    h: 1.0 #thickness of the layers in km
   filtering:
-    min_picks_per_eq: 6
-    min_p_picks_per_eq: 4
-    min_s_picks_per_eq: 3
-    max_sigma11: 1.5
-    max_sigma22: 1.0
-    max_sigma12: 1.0
+    min_picks_per_eq: 6 #Minimum number of picks per eq
+    min_p_picks_per_eq: 4 #Minimum number of P-picks per eq
+    min_s_picks_per_eq: 3 #Minimum number of S-picks per eq
+    max_sigma11: 1.5 #Maximum sigma11
+    max_sigma22: 1.0 #Maximum sigma22
+    max_sigma12: 1.0 #Maximum sigma12
 
 # gamma-analysis optional command
 analysis:
-  log_filename: analisi_picking.log
+  log_filename: picking_analysis.log #name of the log file after phase picking
 
 # plot-catalog optional command
 plotting:
-  gmt_library_path: ""
-  gmt_grid_path: "@earth_relief_15s"
-  region:
+  gmt_library_path: "" #path to GMT library
+  gmt_grid_path: "@earth_relief_15s" #path to GMT grid
+  region: #area limits for plotting
     - 12.5
     - 14.00
     - 42.00
@@ -98,39 +98,40 @@ plotting:
 
 # 05_absolute_location_prep.py
 hypoellipse:
-  h71_min_p: 4
-  h71_min_s: 2
+  h71_min_p: 4 #min number of P-picks per eq
+  h71_min_s: 2 #min number of S-picks per eq
 
 # 06_hypoellipse_check.py
 hypoellipse_check:
-  docker_image: ingv/hypoellipse
-  docker_start_timeout_seconds: 90
+  docker_image: ingv/hypoellipse #docker image for hypocenter location
+  docker_start_timeout_seconds: 90 #docker start timeout in seconds
 
 # 07_location_filtering.py and 08_relative_relocation.py
 dd:
-  max_gap: 180.0
-  max_rms: 0.4
-  max_erh: 0.8
-  max_erz: 0.8
+  max_gap: 180.0 #maximum azimuthal gap in degrees
+  max_rms: 0.4 #maximum root mean square
+  max_erh: 0.8 #maximum horizontal error
+  max_erz: 0.8 #maximum vertical error
 
 # 10_hypodd.py
 hypodd:
-  docker_image: hypodd:2.1b
-  docker_start_timeout_seconds: 90
+  docker_image: hypodd:2.1b #docker image for hypocenter location
+  docker_start_timeout_seconds: 90 #docker start timeout in seconds
   dimensions:
-    mode: auto
-    maxeve0: 2
-    maxlay: 50
-    maxcl: 200
-  ph2dt:
-    min_weight: 0.0
-    max_dist_km: 120.0
-    max_sep_km: 10.0
-    max_neighbors: 10
-    min_links: 8
-    min_observations: 1
-    max_observations: 100
-  relocation:
+    mode: auto #auto or manual to create the hypodd.inc file. Put manual if you want to specify the problem dimensions
+    # The following parameters are described in the hypoDD.inp file
+    maxeve0: 1
+    maxlay: 14
+    maxcl: 30
+  ph2dt: #parameters for ph2dt.inp file
+    min_weight: 0.0 #minimum weight
+    max_dist_km: 120.0 #maximum distance in km
+    max_sep_km: 10.0 #maximum separation in km
+    max_neighbors: 10 #maximum number of neighbors
+    min_links: 8 #minimum number of links
+    min_observations: 1 #minimum number of observations
+    max_observations: 100 #maximum number of observations
+  relocation: #parameters for hypoDD.inp file (see HypoDD documentation)
     idat: 3
     ipha: 3
     max_dist_km: 120.0
@@ -154,23 +155,24 @@ hypodd:
     vp_km_s: [5.0, 6.2, 6.3, 7.0, 8.0]
     vp_vs_ratio: 1.86
 
-# 09_cc_dd.py
+# 09_cc_dd.py  #use cross-correlation to compute differential travel times
 cc_dd:
-  use_gpu: true
-  gpu_batch_size: auto
-  max_dist_km_cc: 3.0
-  cc_threshold: 0.7
-  win_before: 0.1
-  win_after: 0.5
-  cc_max_lag: 0.3
-  freq_min: 2.0
-  freq_max: 15.0
-  network: 3A
-  worker_count: null
-  chunk_size: null
-  p_channel: EHZ
-  s_channel: EHE
-  max_abs_dt_seconds: 10.0
+  use_gpu: true #if you want to use gpu put true
+  gpu_batch_size: auto #batch size for gpu
+  max_dist_km_cc: 3.0 #maximum distance in km
+  cc_threshold: 0.7 #cross-correlation threshold
+  win_before: 0.1 #window before the P-wave arrival
+  win_after: 0.5 #window after the P-wave arrival
+  cc_max_lag: 0.3 #maximum lag for cross-correlation
+  freq_min: 2.0 #minimum frequency
+  freq_max: 15.0 #maximum frequency
+  network: "*" #network to be used, for all networks put "*"
+  worker_count: null #number of workers to be used
+  chunk_size: null #size of data chunks to be processed waveforms
+  min_readings_per_pair: 1 # used to filter the cross correlations using the number of stations
+  p_channel: "??Z" #P-wave channel pattern
+  s_channel: "??[EN]" #S-wave channel pattern
+  max_abs_dt_seconds: 10.0 #maximum absolute travel time difference in seconds
 
 # threshold-analysis optional command
 threshold_analysis:

@@ -154,7 +154,7 @@ def create_hypodd_combined_file(df_loc_final, df_phs_final):
 def create_station_file():
     """
     Reads station data from the CSV and generates the station.dat file
-    formatted as: STATION_NAME LAT LON Z (quota in metri senza decimali).
+    formatted as: STATION_NAME LAT LON Z (elevation in metres without decimals).
     """
     print(f"6. Starting generation of station file: {STATION_FILE}")
     

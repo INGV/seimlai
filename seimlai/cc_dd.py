@@ -7,6 +7,7 @@ Created on Fri Jan 23 11:09:52 2026
 """
 import warnings
 import os
+from collections import Counter, defaultdict
 from glob import glob
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import pandas as pd
@@ -22,7 +23,6 @@ WAVEFORM_DIR = None
 FILE_TRAVEL = None
 OUTPUT_DTCC = None
 
-# --- PARAMETRI ---
 MAX_DIST_KM = None
 CC_THRESHOLD = None
 WIN_BEFORE = None
@@ -33,6 +33,7 @@ FREQ_MAX = None
 CC_NETWORK = None
 CC_WORKER_COUNT = None
 CC_CHUNK_SIZE = None
+CC_MIN_READINGS_PER_PAIR = None
 CC_P_CHANNEL = None
 CC_S_CHANNEL = None
 CC_MAX_ABS_DT_SECONDS = None
@@ -58,6 +59,7 @@ def _apply_context(ctx):
         "CC_NETWORK": CC_NETWORK,
         "CC_WORKER_COUNT": CC_WORKER_COUNT,
         "CC_CHUNK_SIZE": CC_CHUNK_SIZE,
+        "CC_MIN_READINGS_PER_PAIR": CC_MIN_READINGS_PER_PAIR,
         "CC_P_CHANNEL": CC_P_CHANNEL,
         "CC_S_CHANNEL": CC_S_CHANNEL,
         "CC_MAX_ABS_DT_SECONDS": CC_MAX_ABS_DT_SECONDS,
@@ -65,12 +67,10 @@ def _apply_context(ctx):
         "CC_GPU_BATCH_SIZE": CC_GPU_BATCH_SIZE,
     })
 
-# --- FUNZIONI DI SUPPORTO ---
-
 def parse_travel_dat(filepath):
     """
-    Parsa il file travel.dat per ricostruire il catalogo con tempi assoluti.
-    Restituisce un dizionario: {event_id: {'info': ..., 'picks': [...]}}
+    Parse the travel.dat file to reconstruct the catalog with absolute times.
+    Returns a dictionary: {event_id: {'info': ..., 'picks': [...]}}
     """
     catalog = {}
     current_id = None
@@ -79,7 +79,6 @@ def parse_travel_dat(filepath):
         for line in f:
             if line.startswith('#'):
                 parts = line.split()
-                # Formato: # YYYY MM DD HH MI SS.SS LAT LON DEP ... ID
                 ev_id = int(parts[-1])
                 ot = obspy.UTCDateTime(int(parts[1]), int(parts[2]), int(parts[3]), 
                                      int(parts[4]), int(parts[5])) + float(parts[6])
@@ -92,7 +91,6 @@ def parse_travel_dat(filepath):
                 current_id = ev_id
             else:
                 parts = line.split()
-                # Formato: STA TravelTime Weight Phase
                 catalog[current_id]['picks'].append({
                     'sta': parts[0],
                     'tt': float(parts[1]),
@@ -118,28 +116,35 @@ def _get_waveform_path(sta, time, phase, network=None):
 
 
 def get_waveform(sta, time, phase, network=None):
-    """Carica la waveform migliore che corrisponde ai pattern di network e canale."""
+    """Load the waveform segment that covers the pick window"""
     waveform_path = _get_waveform_path(sta, time, phase, network)
     if waveform_path is None:
         return None
     try:
         st = obspy.read(waveform_path)
         st.detrend("demean").filter("bandpass", freqmin=FREQ_MIN, freqmax=FREQ_MAX)
-        return st[0]
+        start = time - WIN_BEFORE - (CC_MAX_LAG / 2.0)
+        end = time + WIN_AFTER + (CC_MAX_LAG / 2.0)
+        return next(
+            (tr for tr in st if tr.stats.starttime <= start and tr.stats.endtime >= end),
+            None,
+        )
     except Exception:
         return None
 
 
-def _extract_pick_windows(catalog, pick_maps):
+def _extract_pick_windows(catalog, pick_maps, debug_counts):
     requests_by_path = {}
     missing_waveforms = 0
     for event_id, picks in pick_maps.items():
         event = catalog[event_id]
         for (sta, phase), travel_time in picks.items():
+            debug_counts[sta]["catalog_picks"] += 1
             pick_time = event["ot"] + travel_time
             waveform_path = _get_waveform_path(sta, pick_time, phase)
             if waveform_path is None:
                 missing_waveforms += 1
+                debug_counts[sta]["missing_waveform"] += 1
                 continue
             requests_by_path.setdefault(waveform_path, []).append(
                 ((event_id, sta, phase), pick_time)
@@ -147,31 +152,44 @@ def _extract_pick_windows(catalog, pick_maps):
 
     windows = {}
     failed_windows = 0
-    print(f"Precaricamento di {len(requests_by_path)} waveform uniche per la GPU...")
+    print(f"Preloading {len(requests_by_path)} unique waveforms for the GPU...")
     for waveform_path, requests in tqdm(requests_by_path.items(), desc="Waveform GPU"):
         try:
             stream = obspy.read(waveform_path)
             stream.detrend("demean").filter("bandpass", freqmin=FREQ_MIN, freqmax=FREQ_MAX)
-            trace = stream[0]
         except Exception:
             failed_windows += len(requests)
+            for ((_, sta, _), _) in requests:
+                debug_counts[sta]["read_error"] += 1
             continue
 
         for key, pick_time in requests:
+            _, sta, _ = key
             start = pick_time - WIN_BEFORE - (CC_MAX_LAG / 2.0)
             end = pick_time + WIN_AFTER + (CC_MAX_LAG / 2.0)
-            if trace.stats.starttime > start or trace.stats.endtime < end:
+            trace = next(
+                (
+                    candidate for candidate in stream
+                    if candidate.stats.starttime <= start
+                    and candidate.stats.endtime >= end
+                ),
+                None,
+            )
+            if trace is None:
                 failed_windows += 1
+                debug_counts[sta]["invalid_window"] += 1
                 continue
             data = np.asarray(trace.slice(start, end).data, dtype=np.float32)
             if data.size < 3 or not np.isfinite(data).all():
                 failed_windows += 1
+                debug_counts[sta]["invalid_window"] += 1
                 continue
             windows[key] = (data.copy(), float(trace.stats.sampling_rate))
+            debug_counts[sta]["valid_window"] += 1
 
     print(
-        f"Finestre GPU pronte: {len(windows)}; "
-        f"waveform mancanti: {missing_waveforms}; finestre non valide: {failed_windows}."
+        f"GPU-Ready Windows: {len(windows)}; "
+        f"Missing Waveforms: {missing_waveforms}; Invalid Windows: {failed_windows}."
     )
     return windows
 
@@ -179,7 +197,7 @@ def _extract_pick_windows(catalog, pick_maps):
 def _fit_correlation_peak(cc, shift_len=None):
     cc = np.asarray(cc, dtype=np.float64)
     if cc.size < 3 or not np.isfinite(cc).all():
-        raise ValueError("correlazione non valida")
+        raise ValueError("Invalid correlation")
 
     cc_curvature = np.concatenate((np.zeros(1), np.diff(cc, 2), np.zeros(1)))
     peak_index = int(cc.argmax())
@@ -190,7 +208,7 @@ def _fit_correlation_peak(cc, shift_len=None):
     while last_sample < len(cc) - 1 and cc_curvature[last_sample + 1] <= 0:
         last_sample += 1
     if last_sample - first_sample + 1 < 3:
-        raise ValueError("meno di 3 campioni disponibili per il fit parabolico")
+        raise ValueError("Less than 3 samples available for parabolic fit")
 
     if shift_len is None:
         shift_len = (len(cc) - 1) // 2
@@ -201,7 +219,7 @@ def _fit_correlation_peak(cc, shift_len=None):
         deg=2,
     )
     if coeffs[0] == 0:
-        raise ValueError("fit parabolico degenere")
+        raise ValueError("Degenerate parabolic fit")
     shift = coeffs[1] / (2.0 * coeffs[0])
     coefficient = (4 * coeffs[0] * coeffs[2] - coeffs[1] ** 2) / (4 * coeffs[0])
     return shift, coefficient
@@ -232,19 +250,22 @@ def _gpu_correlate_batch(first, second, shift_len):
     return correlation.cpu().numpy()
 
 
-def _build_gpu_jobs(tasks, catalog, pick_maps, windows):
+def _build_gpu_jobs(tasks, catalog, pick_maps, windows, debug_counts):
     jobs_by_shape = {}
     for task_index, id1, id2 in tasks:
         picks1 = pick_maps[id1]
         picks2 = pick_maps[id2]
         for sta, phase in sorted(set(picks1) & set(picks2)):
+            debug_counts[sta]["candidate_pairs"] += 1
             first = windows.get((id1, sta, phase))
             second = windows.get((id2, sta, phase))
             if first is None or second is None:
+                debug_counts[sta]["unavailable_pairs"] += 1
                 continue
             first_data, first_rate = first
             second_data, second_rate = second
             if first_rate != second_rate:
+                debug_counts[sta]["rate_mismatch"] += 1
                 continue
             shift_len = int(CC_MAX_LAG * first_rate)
             shape = (len(first_data), len(second_data), shift_len)
@@ -259,6 +280,7 @@ def _build_gpu_jobs(tasks, catalog, pick_maps, windows):
                 first_data,
                 second_data,
             ))
+            debug_counts[sta]["correlation_jobs"] += 1
     return jobs_by_shape
 
 
@@ -276,16 +298,16 @@ def _get_gpu_batch_size(job_count):
     return min(batch_size, max(job_count, 1))
 
 
-def _run_gpu_correlations(tasks, catalog, pick_maps):
-    windows = _extract_pick_windows(catalog, pick_maps)
-    jobs_by_shape = _build_gpu_jobs(tasks, catalog, pick_maps, windows)
+def _run_gpu_correlations(tasks, catalog, pick_maps, debug_counts):
+    windows = _extract_pick_windows(catalog, pick_maps, debug_counts)
+    jobs_by_shape = _build_gpu_jobs(tasks, catalog, pick_maps, windows, debug_counts)
     job_count = sum(len(jobs) for jobs in jobs_by_shape.values())
     batch_size = _get_gpu_batch_size(job_count)
     pair_readings = [[] for _ in tasks]
     failure_count = 0
     print(
-        f"Correlazione di {job_count} coppie di finestre su {device_name} ({device}); "
-        f"batch GPU: {batch_size}."
+        f"Correlation of {job_count} window pairs on {device_name} ({device});"
+        f"GPU batch size: {batch_size}."
     )
 
     with tqdm(total=job_count, desc=f"CC {device.type.upper()}") as progress:
@@ -303,17 +325,21 @@ def _run_gpu_correlations(tasks, catalog, pick_maps):
                         shift, cc_val = _fit_correlation_peak(correlation, shift_len)
                     except ValueError:
                         failure_count += 1
+                        debug_counts[sta]["fit_failures"] += 1
                         continue
                     if cc_val < CC_THRESHOLD:
+                        debug_counts[sta]["below_threshold"] += 1
                         continue
                     dt_cc = (tt1 - tt2) - shift
                     if abs(dt_cc) > CC_MAX_ABS_DT_SECONDS:
                         print(
-                            f"[WARN] dt.cc sospetto scartato: ev {id1}-{id2}, "
+                            f"[WARN] dt.cc suspicion ruled out: ev {id1}-{id2}, "
                             f"{sta} {phase}, tt1={tt1:.4f}, tt2={tt2:.4f}, "
                             f"shift={shift:.4f}, dt_cc={dt_cc:.4f}"
                         )
+                        debug_counts[sta]["invalid_dt"] += 1
                         continue
+                    debug_counts[sta]["accepted"] += 1
                     pair_readings[task_index].append(
                         f"{sta:<5} {dt_cc:10.4f} {cc_val:7.4f} {phase}\n"
                     )
@@ -328,13 +354,13 @@ def _run_gpu_correlations(tasks, catalog, pick_maps):
 
     with open(OUTPUT_DTCC, "w") as f_out:
         for task, readings in zip(tasks, pair_readings):
-            if len(readings) < 4:
+            if len(readings) < CC_MIN_READINGS_PER_PAIR:
                 continue
             _, id1, id2 = task
             f_out.write(f"# {id1:>9} {id2:>9} 0.0\n")
             f_out.writelines(readings)
     if failure_count:
-        print(f"[WARN] Fit parabolico non riuscito per {failure_count} correlazioni.")
+        print(f"[WARN] Failed parabolic fit for {failure_count} correlations.")
 
 def _cc_worker_context():
     return {
@@ -351,6 +377,7 @@ def _cc_worker_context():
         "CC_NETWORK": CC_NETWORK,
         "CC_WORKER_COUNT": CC_WORKER_COUNT,
         "CC_CHUNK_SIZE": CC_CHUNK_SIZE,
+        "CC_MIN_READINGS_PER_PAIR": CC_MIN_READINGS_PER_PAIR,
         "CC_P_CHANNEL": CC_P_CHANNEL,
         "CC_S_CHANNEL": CC_S_CHANNEL,
         "CC_MAX_ABS_DT_SECONDS": CC_MAX_ABS_DT_SECONDS,
@@ -374,11 +401,12 @@ def _process_event_pair(task):
     picks2 = _WORKER_PICK_MAPS[id2]
     lines = []
     warnings_out = []
+    debug_counts = defaultdict(Counter)
     header_written = False
 
     common = sorted(set(picks1.keys()) & set(picks2.keys()))
     for sta, phase in common:
-        # Tempi di arrivo assoluti: Origin Time + Travel Time
+        debug_counts[sta]["candidate_pairs"] += 1
         tt1 = picks1[(sta, phase)]
         tt2 = picks2[(sta, phase)]
         t1 = ev1['ot'] + tt1
@@ -387,36 +415,44 @@ def _process_event_pair(task):
         tr1 = get_waveform(sta, t1, phase)
         tr2 = get_waveform(sta, t2, phase)
 
-        if tr1 and tr2:
-            try:
-                shift, cc_val = xcorr_pick_correction(
-                    t1, tr1, t2, tr2, WIN_BEFORE, WIN_AFTER, CC_MAX_LAG,
-                )
-
-                if cc_val >= CC_THRESHOLD:
-                    dt_cc = (tt1 - tt2) - shift
-                    # Controllo di sicurezza: scarta valori non fisici.
-                    if abs(dt_cc) > CC_MAX_ABS_DT_SECONDS:
-                        warnings_out.append(
-                            f"[WARN] dt.cc sospetto scartato: "
-                            f"ev {id1}-{id2}, {sta} {phase}, "
-                            f"tt1={tt1:.4f}, tt2={tt2:.4f}, "
-                            f"shift={shift:.4f}, dt_cc={dt_cc:.4f}"
-                        )
-                        continue
-                    if not header_written:
-                        lines.append(f"# {id1:>9} {id2:>9} 0.0\n")
-                        header_written = True
-                    lines.append(f"{sta:<5} {dt_cc:10.4f} {cc_val:7.4f} {phase}\n")
-            except Exception as exc:
-                warnings_out.append(f"[WARN] CC fallita: ev {id1}-{id2}, {sta} {phase}: {exc}")
+        if tr1 is None or tr2 is None:
+            debug_counts[sta]["unavailable_pairs"] += 1
             continue
 
+        debug_counts[sta]["correlation_jobs"] += 1
+        try:
+            shift, cc_val = xcorr_pick_correction(
+                t1, tr1, t2, tr2, WIN_BEFORE, WIN_AFTER, CC_MAX_LAG,
+            )
+
+            if cc_val < CC_THRESHOLD:
+                debug_counts[sta]["below_threshold"] += 1
+                continue
+            dt_cc = (tt1 - tt2) - shift
+            # Safety check: discard non-physical values.
+            if abs(dt_cc) > CC_MAX_ABS_DT_SECONDS:
+                debug_counts[sta]["invalid_dt"] += 1
+                warnings_out.append(
+                    f"[WARN] Suspected dt.cc discarded: "
+                    f"ev {id1}-{id2}, {sta} {phase}, "
+                    f"tt1={tt1:.4f}, tt2={tt2:.4f}, "
+                    f"shift={shift:.4f}, dt_cc={dt_cc:.4f}"
+                )
+                continue
+            debug_counts[sta]["accepted"] += 1
+            if not header_written:
+                lines.append(f"# {id1:>9} {id2:>9} 0.0\n")
+                header_written = True
+            lines.append(f"{sta:<5} {dt_cc:10.4f} {cc_val:7.4f} {phase}\n")
+        except Exception as exc:
+            debug_counts[sta]["fit_failures"] += 1
+            warnings_out.append(f"[WARN] CC failed: ev {id1}-{id2}, {sta} {phase}: {exc}")
+
     reading_count = len(lines) - 1 if header_written else 0
-    if reading_count < 4:
+    if reading_count < CC_MIN_READINGS_PER_PAIR:
         lines = []
 
-    return task_index, lines, warnings_out
+    return task_index, lines, warnings_out, dict(debug_counts)
 
 def _process_event_pair_chunk(tasks):
     return [_process_event_pair(task) for task in tasks]
@@ -444,14 +480,18 @@ def _get_cc_chunk_size(task_count, num_workers):
             pass
     return max(1, min(50, task_count // max(num_workers * 8, 1) or 1))
 
+def _merge_debug_counts(target, source):
+    for sta, counts in source.items():
+        target[sta].update(counts)
+
 def run(ctx):
     _apply_context(ctx)
 
-    print(f"Lettura travel.dat: {os.path.basename(FILE_TRAVEL)}")
+    print(f"Reading travel.dat: {os.path.basename(FILE_TRAVEL)}")
     catalog = parse_travel_dat(FILE_TRAVEL)
     event_ids = sorted(catalog.keys())
 
-    print(f"Calcolo CC su {len(event_ids)} eventi selezionati...")
+    print(f"Calculating CC on {len(event_ids)} selected events...")
     warnings.filterwarnings(
         "ignore",
         message="Maximum of cross correlation lower than*"
@@ -460,6 +500,7 @@ def run(ctx):
         ev_id: { (p['sta'], p['phase']): p['tt'] for p in catalog[ev_id]['picks'] }
         for ev_id in event_ids
     }
+    debug_counts = defaultdict(Counter)
     tasks = []
     task_index = 0
     for i in range(len(event_ids)):
@@ -470,7 +511,6 @@ def run(ctx):
             id2 = event_ids[j]
             ev2 = catalog[id2]
 
-            # 1. Filtro Distanza
             dist_m, _, _ = gps2dist_azimuth(ev1['lat'], ev1['lon'], ev2['lat'], ev2['lon'])
             if dist_m / 1000.0 > MAX_DIST_KM:
                 continue
@@ -479,19 +519,23 @@ def run(ctx):
 
     gpu_enabled = bool(CC_USE_GPU) and device.type in {"mps", "cuda"}
     if gpu_enabled:
-        _run_gpu_correlations(tasks, catalog, pick_maps)
+        _run_gpu_correlations(tasks, catalog, pick_maps, debug_counts)
     else:
+        for picks in pick_maps.values():
+            for sta, _ in picks:
+                debug_counts[sta]["catalog_picks"] += 1
         if CC_USE_GPU:
-            print("GPU richiesta ma non disponibile: uso il fallback CPU.")
+            print("GPU required but not available: Using the CPU fallback.")
         num_workers = _get_cc_worker_count(len(tasks)) if tasks else 1
-        print(f"Esecuzione CC parallela con {num_workers} workers su {len(tasks)} coppie entro {MAX_DIST_KM} km...")
+        print(f"Running parallel CC with {num_workers} workers on {len(tasks)} pairs within {MAX_DIST_KM} km...")
 
         with open(OUTPUT_DTCC, "w") as f_out:
             worker_context = _cc_worker_context()
             if num_workers == 1:
                 _cc_worker_init(catalog, pick_maps, worker_context)
-                for task in tqdm(tasks, desc="Loop Coppie"):
-                    _, lines, warnings_out = _process_event_pair(task)
+                for task in tqdm(tasks, desc="Pair Loop"):
+                    _, lines, warnings_out, pair_debug = _process_event_pair(task)
+                    _merge_debug_counts(debug_counts, pair_debug)
                     for msg in warnings_out:
                         print(msg)
                     f_out.writelines(lines)
@@ -507,21 +551,75 @@ def run(ctx):
                 ) as executor:
                     futures = [executor.submit(_process_event_pair_chunk, chunk) for chunk in task_chunks]
 
-                    with tqdm(total=len(tasks), desc="Loop Coppie") as progress:
+                    with tqdm(total=len(tasks), desc="Pair Loop") as progress:
                         for future in as_completed(futures):
                             results = future.result()
                             progress.update(len(results))
-                            for task_index, lines, warnings_out in results:
-                                pending_results[task_index] = (lines, warnings_out)
+                            for task_index, lines, warnings_out, pair_debug in results:
+                                pending_results[task_index] = (lines, warnings_out, pair_debug)
 
                             while next_write in pending_results:
-                                lines, warnings_out = pending_results.pop(next_write)
+                                lines, warnings_out, pair_debug = pending_results.pop(next_write)
+                                _merge_debug_counts(debug_counts, pair_debug)
                                 for msg in warnings_out:
                                     print(msg)
                                 f_out.writelines(lines)
                                 next_write += 1
 
-    print(f"Fatto! File dt.cc generato in {os.path.dirname(OUTPUT_DTCC)}")
+    station_counts = {}
+    with open(OUTPUT_DTCC, "r") as f_in:
+        for line in f_in:
+            if not line.strip() or line.startswith("#"):
+                continue
+            sta = line.split()[0]
+            station_counts[sta] = station_counts.get(sta, 0) + 1
+
+    if station_counts:
+        used_stations = ", ".join(
+            f"{sta}({count})" for sta, count in sorted(station_counts.items())
+        )
+        print(f"Stations used in dt.cc ({len(station_counts)}): {used_stations}")
+    else:
+        print("Stations used in dt.cc: none")
+
+    debug_stations = sorted(
+        sta for sta, counts in debug_counts.items()
+        if counts["valid_window"] or counts["correlation_jobs"] or station_counts.get(sta)
+    )
+    station_log_lines = []
+    if debug_stations:
+        print("Final CC station debug:")
+        for sta in debug_stations:
+            counts = debug_counts[sta]
+            window_total = counts["valid_window"] + counts["invalid_window"] + counts["read_error"]
+            window_info = (
+                f", windows={counts['valid_window']}/{window_total}"
+                if window_total else ""
+            )
+            log_line = (
+                f"  {sta}: pick={counts['catalog_picks']}{window_info}, "
+                f"waveform_missing={counts['missing_waveform']}, "
+                f"couple={counts['candidate_pairs']}, "
+                f"correlate={counts['correlation_jobs']}, "
+                f"without_window={counts['unavailable_pairs']}, "
+                f"cc_under_threshold={counts['below_threshold']}, "
+                f"fit_ko={counts['fit_failures']}, "
+                f"dt_discarded={counts['invalid_dt']}, "
+                f"cc_accepted={counts['accepted']}, "
+                f"dt.cc={station_counts.get(sta, 0)}"
+            )
+            print(log_line)
+            station_log_lines.append(log_line)
+
+    station_log_path = os.path.join(str(ctx.paths.hypodd_output_dir), "cc_station_log")
+    with open(station_log_path, "w") as f_log:
+        f_log.write("Station final debug:\n")
+        f_log.write("\n".join(station_log_lines))
+        if station_log_lines:
+            f_log.write("\n")
+    print(f"Station log saved in {station_log_path}")
+
+    print(f"dt.cc file generated in {os.path.dirname(OUTPUT_DTCC)}")
 
 
 def main():

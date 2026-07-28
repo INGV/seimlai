@@ -65,11 +65,32 @@ def run(ctx):
     
     
     # UPLOAD PICKS FILE
-    sorted_file = os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv")
+    date_tag_val = date_tag if "date_tag" in globals() else f"{year}_{start_day:03d}_{end_day:03d}"
+    sorted_file = os.path.join(output_picks_dir, f"{date_tag_val}_picks_sort.csv")
+    if not os.path.exists(sorted_file):
+        start_str = start_day_str if "start_day_str" in globals() else f"{start_day:03d}"
+        end_str = end_day_str if "end_day_str" in globals() else f"{end_day:03d}"
+        legacy_candidates = [
+            os.path.join(output_picks_dir, f"{year}_{start_str}_{end_str}_picks_sort.csv"),
+            os.path.join(output_picks_dir, f"{start_day}_{end_day}_{year}_picks_sort.csv"),
+            os.path.join(output_picks_dir, f"{start_str}_{end_str}_{year}_picks_sort.csv"),
+        ]
+        for cand in legacy_candidates:
+            if os.path.exists(cand):
+                sorted_file = cand
+                break
+
+    if not os.path.exists(sorted_file):
+        print(f"Sorted picks file not found for current date range ({starttime.date} to {endtime.date}). Running run_sort_picks...")
+        from seimlai.phase_picking import run_sort_picks
+        run_sort_picks(ctx)
+        sorted_file = os.path.join(output_picks_dir, f"{date_tag_val}_picks_sort.csv")
+
+    print(f"Reading picks file: {sorted_file}")
     picks_df = pd.read_csv(sorted_file, sep=",", parse_dates=["Datetime"])
     if "Amp" not in picks_df.columns and "Amplitude" in picks_df.columns:
         picks_df = picks_df.rename(columns={"Amplitude": "Amp"})
-    # Estract nework and station name
+    # Extract network and station name
     # Extract station name from dot-notation if present (e.g. "IV.INTR." -> "INTR")
     # If names are already clean (e.g. "ED01"), leave them as-is
     if picks_df["Station"].str.contains(r"\.").any():
@@ -125,7 +146,7 @@ def run(ctx):
     assignments = pd.DataFrame(assignments, columns=["pick_idx", "event_idx", "prob_gamma"])
     
     # SAVE Raw CATALOG with km coordinates
-    catalog_file_in=os.path.join(output_dir,f"seismic_catalog_{year}_{start_day}_{end_day}.csv")
+    catalog_file_in=os.path.join(output_dir, f"seismic_catalog_{date_tag_val}.csv")
     catalog.to_csv(catalog_file_in, index=False)
     
     # Save picks 
@@ -135,27 +156,27 @@ def run(ctx):
         pick_df = pick_df.reset_index()   
     missing_picks = set(pick_df.index) - set(assignments["pick_idx"])
     if missing_picks:
-        print(f"Warning {len(missing_picks)} pick_idx not find in assignments!")  
+        print(f"Warning: {len(missing_picks)} pick_idx values were not found in assignments!")
     picks_with_events = pick_df.merge(assignments, left_index=True, right_on="pick_idx", how="left")
     picks_with_events["event_idx"] = picks_with_events["event_idx"].fillna(-1).astype(int)  
     picks_with_events = picks_with_events.merge(catalog, left_on="event_idx", right_on="event_index", how="left") 
     missing_events = set(picks_with_events["event_idx"]) - set(catalog["event_index"])
     if missing_events:
-        print(f"Warning: {len(missing_events)} event_idx not match into the catalog!")
+        print(f"Warning: {len(missing_events)} event_idx values do not match the catalog!")
     picks_with_events.drop(columns=["event_index"], inplace=True, errors="ignore")
     picks_with_events = picks_with_events[["id", "timestamp", "prob", "amp", "type", "event_idx", "prob_gamma"]]
     # Save all picks (the id .-1 is referred to un-associated picks)
-    output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{year}_{start_day}_{end_day}.csv")
+    output_gamma_picks = os.path.join(output_dir, f"gamma_pick_{date_tag_val}.csv")
     picks_with_events.to_csv(output_gamma_picks, index=False)
     
-    print(f"Picks save in {output_gamma_picks}!")
+    print(f"Picks saved in {output_gamma_picks}!")
     
     # --------------------------------------
     # Save only associated picks
     gamma_picks = picks_with_events.copy()
     associated_picks = gamma_picks[gamma_picks["event_idx"] != -1].copy()
     associated_picks = associated_picks.sort_values(by=["event_idx", "timestamp"])
-    output_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{year}_{start_day}_{end_day}.csv")
+    output_associated_picks = os.path.join(output_dir, f"gamma_pick_grouped_{date_tag_val}.csv")
     associated_picks.to_csv(output_associated_picks, index=False)
     
     print(f"Associated picks saved in {output_associated_picks}!")
@@ -168,12 +189,12 @@ def run(ctx):
     catalog["longitude"] = [coord[0] for coord in lon_lat]
     catalog["latitude"] = [coord[1] for coord in lon_lat]
     
-    # Delate km coordinate from dataframe and put the degree coordinate.
+    # Replace kilometre coordinates with geographic coordinates.
     catalog = catalog.drop(columns=[x_col, y_col])
-    catalog_file=os.path.join(output_dir,f"seismic_catalog_with_latlon_{year}_{start_day}_{end_day}.csv")
+    catalog_file=os.path.join(output_dir, f"seismic_catalog_with_latlon_{date_tag_val}.csv")
     #Save catalog with correct coordinates
     catalog.to_csv(catalog_file, index=False)
-    print("Seismic catalog saved in seismic_catalog_with_latlon.csv con solo longitude e latitude.")
+    print("Seismic catalog saved in seismic_catalog_with_latlon.csv with longitude and latitude only.")
     
     # Use PyGMT to plot the seismicity
     pygmt.config(GMT_VERBOSE="q")
@@ -186,6 +207,11 @@ def run(ctx):
     # 3. Topography Colormap 
     pygmt.makecpt(cmap="gray", series=[-1000, 3000,1], truncate="0.4/1.0",continuous=True)
     
+    if starttime.date == endtime.date:
+        map_title = f"Central Italy - {starttime.strftime('%Y/%m/%d')} Seismicity"
+    else:
+        map_title = f"Central Italy Seismicity ({starttime.strftime('%Y/%m/%d')} - {endtime.strftime('%Y/%m/%d')})"
+
     # 4. Topography with realistic shading
     fig.grdimage(
         grid=GMT_GRID_PATH,  # your grd file or @
@@ -193,7 +219,7 @@ def run(ctx):
         projection="M6i",
         shading="+a135+nt0.6",
         cmap=True,
-        frame=["af", '+t"Central Italy - 2016/10/30 Seismicity"']
+        frame=["af", f'+t"{map_title}"']
     )
     
     # 5. Coastlines 
@@ -234,7 +260,7 @@ def run(ctx):
     
     # 10. Topography colorbar (top right) — [commented out]
     #fig.colorbar(
-    #    position="JTR+o-1.8c/0c+w0.3c/3c+v",  # verticale
+    #    position="JTR+o-1.8c/0c+w0.3c/3c+v",  # vertical
     #    frame='af+l"Elevation (m)"'
     #)
     
@@ -260,7 +286,7 @@ def run(ctx):
         fig.plot(data=rect, pen="1p,red")
     
     # Save plot 
-    output_file = os.path.join(output_dir, f"catalog_{year}_{start_day}_{end_day}.pdf")
+    output_file = os.path.join(output_dir, f"catalog_{date_tag_val}.pdf")
     fig.savefig(output_file, dpi=300)
     
     # Show the plot
