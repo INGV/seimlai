@@ -313,7 +313,9 @@ def read_and_filter_data():
 
     df_loc_filtered = df_loc[
         (df_loc['GAP'] < MAX_GAP) &
-        (df_loc['RMS_HYPO'] < MAX_RMS)
+        (df_loc['RMS_HYPO'] < MAX_RMS) &
+        (df_loc['ERH'] < MAX_ERH) &
+        (df_loc['ERZ'] < MAX_ERZ)
     ].copy()
 
     all_original_ids = generate_valid_event_ids()
