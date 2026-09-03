@@ -78,6 +78,7 @@ class DerivedConfig:
     end_day_str: str
     year: str
     date_tag: str
+    run_date_tag: str
     thr: str
     gamma_config: dict[str, Any]
 
@@ -212,6 +213,7 @@ class RuntimeContext:
             "start_day_str": self.derived.start_day_str,
             "end_day_str": self.derived.end_day_str,
             "date_tag": self.derived.date_tag,
+            "run_date_tag": self.derived.run_date_tag,
             "THR": self.derived.thr,
             "config": self.derived.gamma_config,
             "analysis_log_filename": self.raw.analysis["log_filename"],
@@ -384,12 +386,13 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
         year_str = f"{start_year}-{end_year}"
         date_tag = f"{start_year}_{starttime.julday:03d}_{end_year}_{endtime.julday:03d}"
 
-    start_day_str = f"{starttime.julday:03d}"
-    end_day_str = f"{endtime.julday:03d}"
     run_date_tag = (
         f"{starttime.year:04d}-{starttime.month:02d}-{starttime.day:02d}_"
-        f"{endtime.month:02d}-{endtime.day:02d}"
+        f"{endtime.year:04d}-{endtime.month:02d}-{endtime.day:02d}"
     )
+
+    start_day_str = f"{starttime.julday:03d}"
+    end_day_str = f"{endtime.julday:03d}"
 
     p_threshold = raw.model["p_threshold"]
     s_threshold = raw.model["s_threshold"]
@@ -464,6 +467,7 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
         end_day_str=end_day_str,
         year=year_str,
         date_tag=date_tag,
+        run_date_tag=run_date_tag,
         thr=thr,
         gamma_config=gamma_config,
     )

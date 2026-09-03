@@ -11,7 +11,7 @@ geography: #specify the area limits
 
 dates: #specify the time window
   starttime: "2016-10-29"
-  endtime: "2016-10-31"
+  endtime: "2017-01-31"
 
 stations: # specify station information
   network: "*" # put "*" to download all networks

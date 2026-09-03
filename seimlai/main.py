@@ -12,8 +12,8 @@ Usage:
     python main.py gamma-analysis
     python main.py plot-catalog
     python main.py threshold-analysis
-    python main.py cc-dd
-    python main.py hypodd
+    python main.py absolute-location
+    python main.py relative-relocation
     python -m seimlai.main
 """
 
@@ -33,25 +33,40 @@ class Step:
     id: str
     command: str
     description: str
-    module: str
+    module: str | tuple[str, ...]
     optional: bool = False
 
-    def load_runner(self) -> Callable:
-        return import_module(self.module).run
+    def modules(self) -> tuple[str, ...]:
+        return (self.module,) if isinstance(self.module, str) else self.module
+
+    @staticmethod
+    def load_runner(module: str) -> Callable:
+        return import_module(module).run
 
 
 STEPS = [
     Step("01", "download", "Download data", "seimlai.download"),
-    Step("02", "data-cleaning", "Data cleaning", "seimlai.data_cleaning"),
-    Step("03", "phase-picking", "Phase picking (CNN)", "seimlai.phase_picking"),
-    Step("04", "association", "Phase association and raw catalog building (GaMMA)", "seimlai.association"),
-    Step("05", "absolute-location-prep", "Data preparation for absolute location", "seimlai.absolute_location_prep"),
-    Step("06", "hypoellipse-check", "Absolute location (HypoEllipse Docker run)", "seimlai.hypoellipse_check"),
-    Step("07", "locations-filtering", "Locations filtering", "seimlai.location_filtering"),
-    Step("08", "relative-relocation", "Relative relocation (HypoDD input generation)", "seimlai.relative_relocation"),
-    Step("09", "cc-dd", "Cross-correlation differential-time generation", "seimlai.cc_dd"),
-    Step("10", "hypodd", "Relative relocation (HypoDD Docker run)", "seimlai.hypodd"),
+    Step("02", "phase-picking", "Phase picking (CNN)", "seimlai.phase_picking"),
+    Step("03", "association", "Phase association and raw catalog building (GaMMA)", "seimlai.association"),
+    Step("04", "absolute-location", "Absolute location", (
+        "seimlai.absolute_location_prep",
+        "seimlai.hypoellipse_check",
+        "seimlai.location_filtering",
+    )),
+    Step("05", "relative-relocation", "Relative relocation", (
+        "seimlai.relative_relocation",
+        "seimlai.cc_dd",
+        "seimlai.hypodd",
+    )),
 ]
+
+LEGACY_STEPS = {
+    "absolute-location-prep": Step("absolute-location-prep", "absolute-location-prep", "Data preparation for absolute location", "seimlai.absolute_location_prep", optional=True),
+    "hypoellipse-check": Step("hypoellipse-check", "hypoellipse-check", "Absolute location (HypoEllipse Docker run)", "seimlai.hypoellipse_check", optional=True),
+    "locations-filtering": Step("locations-filtering", "locations-filtering", "Locations filtering", "seimlai.location_filtering", optional=True),
+    "cc-dd": Step("cc-dd", "cc-dd", "Cross-correlation differential-time generation", "seimlai.cc_dd", optional=True),
+    "hypodd": Step("hypodd", "hypodd", "Relative relocation (HypoDD Docker run)", "seimlai.hypodd", optional=True),
+}
 
 OPTIONAL_STEPS = {
     "gamma-analysis": Step("gamma-analysis", "gamma-analysis", "Analyse GaMMA output", "seimlai.analysis", optional=True),
@@ -69,19 +84,23 @@ def print_cli_logo():
 
 
 def continue_steps():
-    return STEPS[5:]
+    for idx, step in enumerate(STEPS):
+        if step.command == "absolute-location":
+            return STEPS[idx:]
+    return STEPS[3:]
 
 
 def run_step(step, ctx):
     """Run a single pipeline step and return True on success."""
     print(f"\n{'='*60}")
     print(f"  STEP {step.id:>5}  |  {step.description}")
-    print(f"  Module: {step.module}")
+    print(f"  Module(s): {', '.join(step.modules())}")
     print(f"{'='*60}")
     sys.stdout.flush()
     t0 = time.time()
     try:
-        step.load_runner()(ctx)
+        for module in step.modules():
+            step.load_runner(module)(ctx)
     except SystemExit as exc:
         if exc.code not in (0, None):
             print(f"\n[ERROR] Step {step.id} failed (exit code {exc.code}). Pipeline stopped.")
@@ -99,33 +118,29 @@ def parse_args():
     epilog = """
 COMMANDS:
   (none)              Run the full workflow.
-  continue            Continue from the HypoEllipse output check (steps 06-10).
-  01 ... 10           Run one workflow stage by ID.
-  download ... hypodd Run one workflow stage by command name.
+  continue            Continue from absolute location (steps 04-05).
+  01 ... 05           Run one workflow stage by ID.
+  download ... relative-relocation
+                      Run one workflow stage by command name.
   gamma-analysis      Run optional GaMMA output analysis.
   plot-catalog        Run optional catalog plotting.
   threshold-analysis  Run optional threshold analysis.
 
 STEP IDs:
   01  download                 Download data
-  02  data-cleaning            Data cleaning
-  03  phase-picking            Phase picking (CNN)
-  04  association              Phase association and raw catalog building (GaMMA)
-  05  absolute-location-prep   Data preparation for absolute location
-  06  hypoellipse-check        Absolute location (HypoEllipse Docker run)
-  07  locations-filtering      Locations filtering
-  08  relative-relocation      Relative relocation (HypoDD input generation)
-  09  cc-dd                    Cross-correlation differential-time generation
-  10  hypodd                   Relative relocation (HypoDD Docker run)
+  02  phase-picking            Phase picking (CNN)
+  03  association              Phase association and raw catalog building (GaMMA)
+  04  absolute-location        Prepare, run, and filter the HypoEllipse location
+  05  relative-relocation      Prepare and run the HypoDD relocation
 
 EXAMPLES:
   python main.py
   python main.py continue
-  python main.py 03
-  python main.py cc-dd
-  python main.py hypodd
-  python main.py --from 03
-  python main.py --only 08 09 10
+  python main.py 02
+  python main.py absolute-location
+  python main.py relative-relocation
+  python main.py --from 02
+  python main.py --only 04 05
   python main.py gamma-analysis
   python main.py --config user_configuration/config.yaml --only 02
   python -m seimlai.main --config user_configuration/config.yaml --only 02
@@ -139,7 +154,7 @@ EXAMPLES:
         "command",
         nargs="?",
         default=None,
-        choices=["continue", *STEP_IDS, *STEP_COMMANDS.keys(), *OPTIONAL_STEPS.keys()],
+        metavar="COMMAND",
         help="Optional command or stage ID to run instead of the full workflow.",
     )
     parser.add_argument(
@@ -161,7 +176,11 @@ EXAMPLES:
         nargs="+",
         help="Run only these step IDs.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    valid_commands = {"continue", *STEP_IDS, *STEP_COMMANDS, *OPTIONAL_STEPS, *LEGACY_STEPS}
+    if args.command is not None and args.command not in valid_commands:
+        parser.error(f"unknown command '{args.command}'")
+    return args
 
 
 def select_steps(pipeline, ctx, from_step=None, only_steps=None, phase_label="workflow"):
@@ -246,11 +265,19 @@ def _main():
         run_optional_command(ctx, args.command)
         return
 
+    if args.command in LEGACY_STEPS:
+        if args.from_step or args.only_steps:
+            print("[ERROR] --from and --only cannot be used when running a single stage command.")
+            sys.exit(1)
+        if not run_step(LEGACY_STEPS[args.command], ctx):
+            sys.exit(1)
+        return
+
     if args.command == "continue":
         run_pipeline(
             ctx,
             continue_steps(),
-            "continue (steps 06-10)",
+            "continue (steps 04-05)",
             from_step=args.from_step,
             only_steps=args.only_steps,
         )

@@ -43,12 +43,12 @@ The user-editable settings are in [user_configuration/config.yaml](./user_config
 | `python -m seimlai.main` | Run the full workflow through the package module. |
 | `seismic-workflow` | Run the installed PyPI-style entrypoint. |
 | `python main.py --config user_configuration/config.yaml` | Run the full workflow with an explicit config file. |
-| `python main.py continue` | Continue from the HypoEllipse output check, stages `06` to `10`. |
-| `python main.py 03` | Run one stage by ID. |
-| `python main.py cc-dd` | Run cross-correlation differential-time generation. |
-| `python main.py hypodd` | Run the Docker HypoDD relocation stage. |
-| `python main.py --from 03` | Run from stage `03` through the end. |
-| `python main.py --only 06 07` | Run only the selected stage IDs. |
+| `python main.py continue` | Continue from absolute location, stages `04` to `05`. |
+| `python main.py 02` | Run one stage by ID. |
+| `python main.py absolute-location` | Prepare, run, and filter the HypoEllipse location. |
+| `python main.py relative-relocation` | Prepare and run the HypoDD relocation. |
+| `python main.py --from 02` | Run from stage `02` through the end. |
+| `python main.py --only 04 05` | Run only the selected stage IDs. |
 | `python main.py gamma-analysis` | Run optional GaMMA picking/association analysis. |
 | `python main.py plot-catalog` | Run optional catalog plotting. |
 | `python main.py threshold-analysis` | Run optional threshold comparison plots. |
@@ -59,24 +59,19 @@ The user-editable settings are in [user_configuration/config.yaml](./user_config
 | ID | Command | What it does |
 | --- | --- | --- |
 | `01` | `download` | Download data. |
-| `02` | `data-cleaning` | Data cleaning. |
-| `03` | `phase-picking` | Phase picking with the configured deep-learning model available on Seisbench. |
-| `04` | `association` | Phase association and raw catalog building with GaMMA. |
-| `05` | `absolute-location-prep` | Prepare HypoEllipse input files. |
-| `06` | `hypoellipse-check` | Run absolute location with HypoEllipse in Docker. |
-| `07` | `locations-filtering` | Parse and filter HypoEllipse locations. |
-| `08` | `relative-relocation` | Generate HypoDD catalog and station input files. |
-| `09` | `cc-dd` | Generate cross-correlation differential times in `dt.cc`. |
-| `10` | `hypodd` | Run `ph2dt` and `hypoDD` in Docker. |
+| `02` | `phase-picking` | Phase picking with the configured deep-learning model available on Seisbench. |
+| `03` | `association` | Phase association and raw catalog building with GaMMA. |
+| `04` | `absolute-location` | Prepare input, run HypoEllipse, and filter its locations. |
+| `05` | `relative-relocation` | Prepare input, generate cross-correlation differential times, and run HypoDD. |
 
 ## Single Stage Commands
 
 The easiest way to run one stage is through `main.py`:
 
 ```bash
-python main.py 03
+python main.py 02
 ```
-The same stages can also be run by command name, for example `python main.py hypodd`.
+The same stages can also be run by command name, for example `python main.py relative-relocation`.
 
 Stage commands and optional commands are available through `main.py`:
 
@@ -134,12 +129,23 @@ output/
   threshold_p<P>_s<S>/
     output_picks_<P>/
     output_catalog_<P>/
-      gamma/  hypoellipse/{input,output}/  hypodd/{input,input&output,output}/
+      gamma/
+      hypoellipse/<dates>/
+        input/
+        output/
+      hypodd/<dates>/
+        input/
+        output/
+        ph2dt/
+          input/
+          output/
 ```
 
 `threshold_comparison/` contains reports that aggregate multiple threshold
-runs. HypoEllipse input and final files are separated in `input/` and `output/`.
-HypoDD uses `input&output/` for the `ph2dt` products consumed by `hypoDD`.
+runs. For both HypoEllipse and HypoDD, data is organized under a subfolder named
+after the configured dates (e.g. `2016-10-29_2016-10-31`), containing separated
+`input/` and `output/` folders (plus `ph2dt/` for HypoDD). This ensures that
+changing the analysis dates creates a separate folder without overwriting existing data.
 
 ## Repository Layout
 
@@ -185,7 +191,6 @@ This is useful for notebooks, tests, new scripts, or a future interface around t
 | `main.py` | Main CLI orchestrator for the whole workflow. |
 | `context.py` | Loads `user_configuration/config.yaml`, validates settings, builds derived paths/settings, and lazily creates heavy objects such as models, devices, transformers, and FDSN clients. |
 | `download.py` | Implementation for waveform/station download. |
-| `data_cleaning.py` | Implementation for the cleaning stage. |
 | `phase_picking.py` | Implementation for deep-learning models to phase picking. |
 | `association.py` | Implementation for GaMMA association and raw catalog generation. |
 | `absolute_location_prep.py` | Implementation for HypoEllipse/Hypo71 preparation files. |
@@ -225,7 +230,7 @@ This is useful for notebooks, tests, new scripts, or a future interface around t
 - `python main.py` runs the full workflow controller.
 - `python main.py 03` runs one stage by ID.
 - `python -m seimlai.main` runs the same controller through the package.
-- `python main.py cc-dd` and `python main.py hypodd` run stages `09` and `10` by command name.
+- `python main.py absolute-location` and `python main.py relative-relocation` run the two location stages by command name.
 - `python main.py plot-catalog` runs an optional command through the main controller.
 - `import seimlai.phase_picking` reuses the implementation from Python code.
 
