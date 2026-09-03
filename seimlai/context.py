@@ -386,6 +386,10 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
 
     start_day_str = f"{starttime.julday:03d}"
     end_day_str = f"{endtime.julday:03d}"
+    run_date_tag = (
+        f"{starttime.year:04d}-{starttime.month:02d}-{starttime.day:02d}_"
+        f"{endtime.month:02d}-{endtime.day:02d}"
+    )
 
     p_threshold = raw.model["p_threshold"]
     s_threshold = raw.model["s_threshold"]
@@ -398,10 +402,10 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
     threshold_dir = output_base / f"threshold_p{p_threshold}_s{s_threshold}"
     threshold_comparison_dir = output_base / "threshold_comparison"
     output_dir = threshold_dir / f"output_catalog_{p_threshold}" / "gamma"
-    h71_filtered_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypoellipse" / "input"
+    h71_filtered_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypoellipse" / run_date_tag / "input"
     hypoellipse_dir = h71_filtered_dir.parent
     hypoellipse_output_dir = hypoellipse_dir / "output"
-    hypodd_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypodd"
+    hypodd_dir = threshold_dir / f"output_catalog_{p_threshold}" / "hypodd" / run_date_tag
     dd_dir = hypodd_dir / "ph2dt" / "input"
     ph2dt_output_dir = hypodd_dir / "ph2dt" / "output"
     hypodd_input_dir = hypodd_dir / "input"

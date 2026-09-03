@@ -241,9 +241,11 @@ def _prepare_run_dir(ctx):
 
     shutil.copy2(model_path, input_dir / MODEL_NAME)
     shutil.copy2(parameters_path, input_dir / PARAMETERS_NAME)
-    alias_stations_path = input_dir / ALIAS_STATIONS_NAME
+    temporary_dir = input_dir / "temporary"
+    temporary_dir.mkdir(parents=True, exist_ok=True)
+    alias_stations_path = temporary_dir / ALIAS_STATIONS_NAME
     alias_phs_path = input_dir / ALIAS_PHS_NAME
-    alias_map_path = input_dir / ALIAS_MAP_NAME
+    alias_map_path = temporary_dir / ALIAS_MAP_NAME
 
     _create_alias_inputs(
         stations_path=stations_path,
@@ -257,7 +259,7 @@ def _prepare_run_dir(ctx):
 
     _write_filecom(
         input_dir / FILECOM_NAME,
-        stations_name=ALIAS_STATIONS_NAME,
+        stations_name=f"temporary/{ALIAS_STATIONS_NAME}",
         phs_name=ALIAS_PHS_NAME,
     )
     return run_dir
@@ -331,7 +333,7 @@ def run(ctx):
         sys.exit(1)
     _restore_real_station_names(
         location_1d_out_path,
-        Path(ctx.paths.hypoellipse_input_dir) / ALIAS_MAP_NAME,
+        Path(ctx.paths.hypoellipse_input_dir) / "temporary" / ALIAS_MAP_NAME,
     )
 
     print(f"HypoEllipse output written to: {location_1d_out_path}")
