@@ -56,6 +56,7 @@ STEPS = [
 OPTIONAL_STEPS = {
     "gamma-analysis": Step("gamma-analysis", "gamma-analysis", "Analyse GaMMA output", "seimlai.analysis", optional=True),
     "plot-catalog": Step("plot-catalog", "plot-catalog", "Plot catalog (PyGMT)", "seimlai.plotting", optional=True),
+    "plot-hypoellipse": Step("plot-hypoellipse", "plot-hypoellipse", "Plot all and filtered HypoEllipse catalogs (PyGMT)", "seimlai.hypoellipse_plotting", optional=True),
     "threshold-analysis": Step("threshold-analysis", "threshold-analysis", "Analyse threshold results", "seimlai.threshold_analysis", optional=True),
 }
 

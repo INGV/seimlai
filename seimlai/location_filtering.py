@@ -106,7 +106,12 @@ def parse_events(lines):
                 if m1:
                     seh_val = float(m1.group(1)); sez_val = float(m1.group(2)); break
                 if re.search(r"^\s*seh\s+sez\b", line2, flags=re.IGNORECASE) and (t+1) < N:
-                    nums = re.findall(r"[-+]?\d+\.\d+|[-+]?\d+", lines[t+1])
+                    # HypoEllipse emits values below one as ``.5`` rather
+                    # than ``0.5``.  The previous expression captured only
+                    # the trailing digit (``5``), inflating SEH/SEZ by 10.
+                    nums = re.findall(
+                        r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)", lines[t+1]
+                    )
                     if len(nums) >= 2:
                         seh_val = float(nums[0]); sez_val = float(nums[1]); break
 
