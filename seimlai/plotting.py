@@ -96,9 +96,6 @@ def run(ctx):
     # Save and Show
     output_pdf = os.path.join(output_dir, f"map_catalog_{date_tag_val}.pdf")
     fig.savefig(output_pdf, dpi=300)
-    legacy_pdf = os.path.join(output_dir, f"map_catalog_{year}_{start_day}_{end_day}.pdf")
-    if legacy_pdf != output_pdf:
-        fig.savefig(legacy_pdf, dpi=300)
     fig.show()
     print(f"Map saved to: {output_pdf}")
 
