@@ -32,6 +32,16 @@ def run(ctx):
 
     catalog = pd.read_csv(catalog_file)
     station_df = pd.read_csv(stations_file)
+    station_start = pd.to_datetime(station_df["start_date"], errors="coerce", utc=True)
+    station_end = pd.to_datetime(station_df["end_date"], errors="coerce", utc=True)
+    period_start = pd.to_datetime(starttime.datetime, utc=True)
+    period_end = pd.to_datetime(endtime.datetime, utc=True)
+    if period_end == period_end.normalize():
+        period_end += pd.Timedelta(days=1)
+    station_df = station_df[
+        (station_start.isna() | (station_start < period_end))
+        & (station_end.isna() | (station_end >= period_start))
+    ]
 
     pygmt.config(GMT_VERBOSE="q")
 
