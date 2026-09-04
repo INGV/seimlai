@@ -25,11 +25,49 @@ from datetime import timedelta, datetime
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import sys
+import fcntl
 
 get_fdsn_clients = None
 log_file = None
 io_lock = threading.Lock()
 station_metadata = []
+
+
+def _merge_station_metadata(csv_path, new_rows):
+    """Merge station rows safely when multiple download processes finish together."""
+    csv_path = os.fspath(csv_path)
+    lock_path = f"{csv_path}.lock"
+    temp_path = f"{csv_path}.{os.getpid()}.tmp"
+
+    with open(lock_path, "a") as station_lock:
+        fcntl.flock(station_lock.fileno(), fcntl.LOCK_EX)
+        rows_by_station = {}
+        fieldnames = list(new_rows[0].keys()) if new_rows else None
+
+        if os.path.exists(csv_path):
+            with open(csv_path, newline="") as f:
+                reader = csv.DictReader(f)
+                fieldnames = fieldnames or reader.fieldnames
+                for row in reader:
+                    rows_by_station[(row["network"], row["station"])] = row
+
+        for row in new_rows:
+            rows_by_station[(row["network"], row["station"])] = row
+
+        if not rows_by_station:
+            return 0
+
+        try:
+            with open(temp_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows_by_station.values())
+            os.replace(temp_path, csv_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    return len(rows_by_station)
 
 
 def _apply_context(ctx):
@@ -39,7 +77,12 @@ def log(message):
     """Writes a message both to the screen and to a file in a thread-safe manner"""
     with io_lock:
         print(message)
-        log_file.write(message + "\n")
+        fcntl.flock(log_file.fileno(), fcntl.LOCK_EX)
+        try:
+            log_file.write(message + "\n")
+            log_file.flush()
+        finally:
+            fcntl.flock(log_file.fileno(), fcntl.LOCK_UN)
 
 # === Helper function for clients ===
 def try_with_clients(method_name, *args, **kwargs):
@@ -113,6 +156,14 @@ def process_single_channel(net_code, sta_code, comp, t0, t1, year, day_of_year):
 
 
 def run(ctx):
+    lock_path = ctx.paths.project_root / ".archive.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a") as archive_lock:
+        fcntl.flock(archive_lock.fileno(), fcntl.LOCK_SH)
+        _run(ctx)
+
+
+def _run(ctx):
     global io_lock, log_file, station_metadata
     _apply_context(ctx)
 
@@ -128,8 +179,8 @@ def run(ctx):
     station_metadata = []
 
     # === Open log file & Lock ===
-    log_file = open(download_log_path, "w")
-    # The lock prevents two processes from writing to the file at the same time
+    log_file = open(download_log_path, "a")
+    # The lock prevents worker threads from writing to the file at the same time
     io_lock = threading.Lock()
 
     # === MAIN EXECUTION ===
@@ -225,13 +276,8 @@ def run(ctx):
     # === Save station metadata to CSV ===
     csv_path = stations_csv_path
     if station_metadata:
-        fieldnames = list(station_metadata[0].keys())
-        with open(csv_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in station_metadata:
-                writer.writerow(row)
-        log(f"\n Station metadata saved to: {csv_path}")
+        total_stations = _merge_station_metadata(csv_path, station_metadata)
+        log(f"\n Station metadata merged into: {csv_path} ({total_stations} total stations)")
     else:
         log("\n No station metadata collected.")
 

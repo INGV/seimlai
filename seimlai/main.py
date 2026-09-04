@@ -12,12 +12,15 @@ Usage:
     python main.py gamma-analysis
     python main.py plot-catalog
     python main.py threshold-analysis
+    python main.py clean-archive
     python main.py absolute-location
     python main.py relative-relocation
     python -m seimlai.main
 """
 
 import argparse
+import fcntl
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -83,6 +86,24 @@ def print_cli_logo():
     print(files("seimlai").joinpath("logo", "clilogo.txt").read_text(encoding="utf-8"), end="")
 
 
+def clean_archive(ctx):
+    """Remove only the configured case-study download archive."""
+    archive_path = ctx.paths.archive_dir.resolve()
+    project_path = ctx.paths.project_root.resolve()
+    if archive_path != project_path / "archive":
+        raise RuntimeError(f"Refusing to clean unexpected archive path: {archive_path}")
+
+    project_path.mkdir(parents=True, exist_ok=True)
+    lock_path = project_path / ".archive.lock"
+    with open(lock_path, "a") as archive_lock:
+        fcntl.flock(archive_lock.fileno(), fcntl.LOCK_EX)
+        if archive_path.exists():
+            shutil.rmtree(archive_path)
+        archive_path.mkdir(parents=True)
+
+    print(f"Download archive cleaned: {archive_path}")
+
+
 def continue_steps():
     for idx, step in enumerate(STEPS):
         if step.command == "absolute-location":
@@ -125,6 +146,7 @@ COMMANDS:
   gamma-analysis      Run optional GaMMA output analysis.
   plot-catalog        Run optional catalog plotting.
   threshold-analysis  Run optional threshold analysis.
+  clean-archive       Remove the download archive for the configured case study.
 
 STEP IDs:
   01  download                 Download data
@@ -142,6 +164,7 @@ EXAMPLES:
   python main.py --from 02
   python main.py --only 04 05
   python main.py gamma-analysis
+  python main.py clean-archive
   python main.py --config user_configuration/config.yaml --only 02
   python -m seimlai.main --config user_configuration/config.yaml --only 02
 """
@@ -177,7 +200,7 @@ EXAMPLES:
         help="Run only these step IDs.",
     )
     args = parser.parse_args()
-    valid_commands = {"continue", *STEP_IDS, *STEP_COMMANDS, *OPTIONAL_STEPS, *LEGACY_STEPS}
+    valid_commands = {"continue", "clean-archive", *STEP_IDS, *STEP_COMMANDS, *OPTIONAL_STEPS, *LEGACY_STEPS}
     if args.command is not None and args.command not in valid_commands:
         parser.error(f"unknown command '{args.command}'")
     return args
@@ -249,6 +272,14 @@ def _main():
     except Exception as exc:
         print(f"[ERROR] {exc}")
         sys.exit(1)
+
+    if args.command == "clean-archive":
+        if args.from_step or args.only_steps:
+            print("[ERROR] --from and --only cannot be used with clean-archive.")
+            sys.exit(1)
+        clean_archive(ctx)
+        return
+
     ensure_initial_directories(ctx)
 
     if args.command in STEP_IDS or args.command in STEP_COMMANDS:
