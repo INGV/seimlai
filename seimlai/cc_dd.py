@@ -30,6 +30,7 @@ CC_SNR_THRESHOLD = None
 CC_MIN_COMMON_PICKS_PER_PAIR = None
 CC_MIN_READINGS_PER_PAIR = None
 CC_MAX_ABS_DT_SECONDS = None
+CC_MAX_NEIGHBORS = None
 FREQ_MIN = None
 FREQ_MAX = None
 FILTER_PAD_SECONDS = None
@@ -84,6 +85,7 @@ def _apply_context(ctx):
         "CC_MAX_ABS_DT_SECONDS": float(
             _cfg_value(cfg, "max_abs_dt_seconds", 2.0)
         ),
+        "CC_MAX_NEIGHBORS": int(_cfg_value(cfg, "max_neighbors", 20)),
         "FREQ_MIN": float(_cfg_value(cfg, "freq_min")),
         "FREQ_MAX": float(_cfg_value(cfg, "freq_max")),
         "FILTER_PAD_SECONDS": float(_cfg_value(cfg, "filter_pad_seconds", 1.0)),
@@ -692,8 +694,14 @@ def _write_station_log(ctx, debug_counts):
 
 def _build_event_pair_tasks(event_ids, catalog, pick_maps):
     """
-    Find only nearby event pairs with a spatial index, then verify their
-    geodetic distance exactly. This avoids comparing every event to every other.
+    Find a bounded number of nearby event pairs with a spatial index.
+
+    A dense catalog can contain hundreds of millions of pairs within a fixed
+    radius.  Keeping every such pair is both redundant for HypoDD and can
+    exhaust RAM before a single waveform is correlated.  Each event therefore
+    contributes at most ``CC_MAX_NEIGHBORS`` nearest neighbours within the
+    configured radius. Pairs selected from either endpoint are de-duplicated,
+    then their distance is verified geodetically.
     """
     earth_radius_km = 6371.0088
 
@@ -717,14 +725,43 @@ def _build_event_pair_tasks(event_ids, catalog, pick_maps):
     search_radius_km = 2.0 * earth_radius_km * np.sin(
         (MAX_DIST_KM * 1.01) / (2.0 * earth_radius_km)
     )
-    candidate_pairs = tree.query_pairs(
-        search_radius_km,
-        output_type="ndarray",
+    max_neighbors = min(CC_MAX_NEIGHBORS, max(len(event_ids) - 1, 0))
+    if max_neighbors < 1:
+        return []
+
+    # ``query_pairs`` materialises every pair in the radius. In this catalog
+    # that was >900 million rows (>100 GB once converted to Python tasks).
+    # Querying k nearest neighbours keeps memory O(N * k), not O(number of
+    # all nearby pairs).
+    _, neighbor_indexes = tree.query(
+        coordinates,
+        k=max_neighbors + 1,  # includes each event itself at distance zero
+        distance_upper_bound=search_radius_km,
     )
+    neighbor_indexes = np.asarray(neighbor_indexes)
+    if neighbor_indexes.ndim == 1:
+        neighbor_indexes = neighbor_indexes[:, None]
+
+    source_indexes = np.repeat(
+        np.arange(len(event_ids), dtype=np.int64), neighbor_indexes.shape[1]
+    )
+    target_indexes = neighbor_indexes.reshape(-1).astype(np.int64, copy=False)
+    valid = (target_indexes < len(event_ids)) & (target_indexes != source_indexes)
+    source_indexes = source_indexes[valid]
+    target_indexes = target_indexes[valid]
+
+    low = np.minimum(source_indexes, target_indexes)
+    high = np.maximum(source_indexes, target_indexes)
+    # Compact integer keys make de-duplication much cheaper than a Python set
+    # of millions of ``(event_1, event_2)`` tuples.
+    pair_keys = np.unique(low * len(event_ids) + high)
+    first_indexes = pair_keys // len(event_ids)
+    second_indexes = pair_keys % len(event_ids)
 
     print(
-        f"Spatial index found {len(candidate_pairs)} candidate pairs "
-        f"before exact distance and common-pick checks."
+        f"Spatial index selected {len(pair_keys)} nearest-neighbour candidate pairs "
+        f"(at most {max_neighbors} neighbours per event) before exact distance "
+        "and common-pick checks."
     )
 
     pick_key_sets = {
@@ -733,7 +770,7 @@ def _build_event_pair_tasks(event_ids, catalog, pick_maps):
     }
 
     tasks = []
-    for index1, index2 in candidate_pairs:
+    for index1, index2 in zip(first_indexes, second_indexes):
         id1 = event_ids[int(index1)]
         id2 = event_ids[int(index2)]
 
@@ -765,6 +802,8 @@ def run(ctx):
         globals()["device_name"] = "CPU"
     if not 0.0 < CC_THRESHOLD <= 1.0:
         raise ValueError("cc_dd.cc_threshold must be in (0, 1].")
+    if CC_MAX_NEIGHBORS < 1:
+        raise ValueError("cc_dd.max_neighbors must be a positive integer.")
     if not (0.0 < FREQ_MIN < FREQ_MAX):
         raise ValueError("cc_dd.freq_min and freq_max are not valid.")
 

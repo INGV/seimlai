@@ -1,5 +1,5 @@
 case_study:
-  name: amatrice_catalog #name of the case study folder
+  name: amatrice_catalog_2016_2017 #name of the case study folder
   personal_folder: null # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
   download_data: true # if you want to download the data put true, otherwise put false
 
@@ -10,8 +10,8 @@ geography: #specify the area limits
   maxlongitude: 14.00
 
 dates: #specify the time window
-  starttime: "2016-10-29"
-  endtime: "2017-01-31"
+  starttime: "2016-07-01"
+  endtime: "2017-02-28"
 
 stations: # specify station information
   network: "*" # put "*" to download all networks
@@ -27,8 +27,8 @@ model:
   model_type: aq2009 #define a pretrained-model available on Seisbench
   custom_model_path: null #if you have a PyTorch file (.pth), specify its path; otherwise use null
   batch_size: 256 #size of data batches to be processed waveforms
-  p_threshold: 0.8 #threshold decision for P-wave
-  s_threshold: 0.8 #threshold decision for P-wave
+  p_threshold: 0.2 #threshold decision for P-wave
+  s_threshold: 0.2 #threshold decision for P-wave
 
 # 03_phase_picking.py - runtime settings
 phase_picking:
@@ -109,9 +109,9 @@ hypoellipse_check:
 # 07_location_filtering.py and 08_relative_relocation.py
 dd:
   max_gap: 180.0 #maximum azimuthal gap in degrees
-  max_rms: 0.4 #maximum root mean square
-  max_erh: 0.8 #maximum horizontal error
-  max_erz: 0.8 #maximum vertical error
+  max_rms: 0.8 #maximum root mean square
+  max_erh: 2.0 #maximum horizontal error
+  max_erz: 2.0 #maximum vertical error
 
 # 10_hypodd.py
 hypodd:
@@ -150,25 +150,8 @@ hypodd:
       - [5, 1.0, 0.7, 8, 6, 0.1, 0.1, 8, 6, 200]
       - [5, 1.0, 0.7, 6, 4, 0.01, 0.01, 6, 4, 220]
   velocity_model:
-    top_km:
-      [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 14.0, 16.0]
-    vp_km_s:
-      [
-        5.0,
-        5.15,
-        5.30,
-        5.45,
-        5.60,
-        5.75,
-        5.90,
-        6.05,
-        6.20,
-        6.35,
-        6.50,
-        6.65,
-        6.80,
-        7.0,
-      ]
+    top_km: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 14.0, 16.0]
+    vp_km_s: [5.0, 5.15,5.30, 5.45, 5.60, 5.75, 5.90, 6.05, 6.20, 6.35, 6.50, 6.65, 6.80, 7.0]
     vp_vs_ratio: 1.86
 
 # 09_cc_dd.py  #use cross-correlation to compute differential travel times
