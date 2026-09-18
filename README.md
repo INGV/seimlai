@@ -299,11 +299,9 @@ If you use **SeiMLAI** in your research, please cite:
 
 > Fonzetti R., Crocetta A., and Bailo D., (year)
 > National Institute of Geophysics and Volcanology (INGV), Rome, Italy
-> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*. **Submitted**
+> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*. **Submitted at SoftwareX Journal**
 
 ## License
-
-© 2024 EPOS — European Plate Observing System.
 
 This work is licensed under the [GNU Affero General Public License v3.0](LICENSE), unless otherwise stated.
 
@@ -314,6 +312,9 @@ Individual software packages, data services, waveform data, station metadata and
 **Corresponding author:** [Rossella Fonzetti]  
 [National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
 [Email](mailto:rossella.fonzetti@ingv.it)
+**Co-author** [Alessandro Crocetta]
+[National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
+[Email](mailto:alessandro.crocetta@ingv.it)
 
-For questions, bug reports, or collaborations related to SeiMLAI, please contact
-the corresponding author.
+For questions, bug reports, please contact the Co-author [Alessandro Crocetta].
+For collaborations related to SeiMLAI contact the Corresponding author [Rossella Fonzetti].
