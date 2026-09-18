@@ -310,12 +310,11 @@ Individual software packages, data services, waveform data, station metadata and
 ## Contact
 
 **Corresponding author:** [Rossella Fonzetti]  
-[National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
-[Email](mailto:rossella.fonzetti@ingv.it)
+[National Institute of Geophysics and Volcanology (INGV), Rome, Italy][rossella.fonzetti@ingv.it](mailto:rossella.fonzetti@ingv.it)
 
-**Co-author** [Alessandro Crocetta]
+**Co-author:** [Alessandro Crocetta]
 [National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
-[Email](mailto:alessandro.crocetta@ingv.it)
+[alessandro.crocetta@ingv.it](mailto:alessandro.crocetta@ingv.it)
 
 For questions, bug reports, please contact the Co-author [Alessandro Crocetta].
 For collaborations related to SeiMLAI contact the Corresponding author [Rossella Fonzetti].
