@@ -1,5 +1,4 @@
 __pycache__/
+.DS_Store
 library_test.py
 layout_test
-eikonal
-amatrice_catalog
