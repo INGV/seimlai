@@ -312,6 +312,7 @@ Individual software packages, data services, waveform data, station metadata and
 **Corresponding author:** [Rossella Fonzetti]  
 [National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
 [Email](mailto:rossella.fonzetti@ingv.it)
+
 **Co-author** [Alessandro Crocetta]
 [National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
 [Email](mailto:alessandro.crocetta@ingv.it)
