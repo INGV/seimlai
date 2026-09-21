@@ -4,7 +4,9 @@
 
 # SeiMLAI: SEIsmic catalog for Machine Learning And Imaging
 
-**SeiMLAI** is a Python workflow that allows you to obtain a **high-resolution seismic catalog** by leveraging known infrastructure and using new machine-learning algorithms for P- and S-wave picking (Zhu and Beroza, 2019; Mousavi et al., 2020) and phase association (Zhu et al., 2022). After downloading the waveforms for a specific period and area, the waveforms are organised into an archive, and the arrival times of the P- and S-phases are picked. The workflow allows the use of either a pre-trained model, a different deep-learning picker or a user-created model. Once the creation of an archive containing the continuous waveform recorded by a seismic stations, they are employed to create an initial catalogue that can be viewed for the first time. The workflow also offers **accurate post-processing steps** for raw data from machine learning, providing input files for both absolute and relative locations at the end of the workflow that are run using a Docker container (Merkel, 2014).
+**SeiMLAI** (SEIsmic catalog for Machine Learning And Imaging) is a modular Python workflow for building high-resolution seismic catalogs from continuous waveform data. It integrates waveform acquisition, machine-learning-based P- and S-wave picking, phase association, quality control and visualization, absolute earthquake location, cross-correlation, and double-difference relative relocation into a single configurable and reproducible processing pipeline.
+SeiMLAI builds on established seismological tools, including SeisBench for deep-learning phase picking, **GaMMA** for phase association, **PyGMT** for visualization, **HypoEllipse** for absolute location, and **HypoDD** for relative relocation. Location procedures are containerized with **Docker** to improve portability and reproducibility across computing environments.
+The workflow can be run end-to-end from the command line or individual modules can be imported into Python applications, notebooks, and custom processing pipelines.
 
 The product package includes the existing Seisbench (Woollam et al., 2022) and PyGMT (Tian et al., 2026) libraries for seismic data analysis using machine learning and for the preliminary visualization of the resulting catalog, respectively.
 
@@ -307,10 +309,14 @@ This work is licensed under the [GNU Affero General Public License v3.0](LICENSE
 
 Individual software packages, data services, waveform data, station metadata and external images remain subject to their respective licenses and terms of use.
 
-## Contact
+## Contacts
 
 **Corresponding author:** [Rossella Fonzetti]  
 [National Institute of Geophysics and Volcanology (INGV), Rome, Italy][rossella.fonzetti@ingv.it](mailto:rossella.fonzetti@ingv.it)
+
+**Co-author:** [Daniele Bailo]
+[National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
+[daniele.bailo@ingv.it](mailto:daniele.bailo@ingv.it)
 
 **Co-author:** [Alessandro Crocetta]
 [National Institute of Geophysics and Volcanology (INGV), Rome, Italy]
