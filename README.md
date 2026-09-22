@@ -17,7 +17,7 @@ This repository can be used in two ways:
 
 If you are only using the workflow, start with the command-line section. You do not need to import Python modules manually.
 
-## Quickstart
+## Installation & Quickstart
 
 Create or update the Conda environment, activate it, inspect the CLI, then run the workflow:
 
