@@ -4,7 +4,7 @@
 
 # SeiMLAI: SEIsmic catalog for Machine Learning And Imaging
 
-[![DOI](https://zenodo.org/badge/1379671446.svg)](https://doi.org/10.5281/zenodo.22897626)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22897626.svg)](https://doi.org/10.5281/zenodo.22897626)
 
 **SeiMLAI** (SEIsmic catalog for Machine Learning And Imaging) is a modular Python workflow for building high-resolution seismic catalogs from continuous waveform data. It integrates waveform acquisition, machine-learning-based P- and S-wave picking, phase association, quality control and visualization, absolute earthquake location, cross-correlation, and double-difference relative relocation into a single configurable and reproducible processing pipeline.
 SeiMLAI builds on established seismological tools, including SeisBench for deep-learning phase picking, **GaMMA** for phase association, **PyGMT** for visualization, **HypoEllipse** for absolute location, and **HypoDD** for relative relocation. Location procedures are containerized with **Docker** to improve portability and reproducibility across computing environments.
