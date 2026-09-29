@@ -303,7 +303,7 @@ If you use **SeiMLAI** in your research, please cite:
 
 > Fonzetti R., Crocetta A., and Bailo D., (year)
 > National Institute of Geophysics and Volcanology (INGV), Rome, Italy
-> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*.
+> *SeiMLAI: SEIsmic catalog for Machine Learning And Imaging*. **Submitted at Applied Computing and Geosciences** (Submission ID: ACAGS-D-26-00330)
 
 ## License
 
