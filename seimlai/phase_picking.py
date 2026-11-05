@@ -7,6 +7,7 @@ import time
 import re
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from tqdm import tqdm
 from datetime import timedelta
 
 import numpy as np
@@ -435,7 +436,7 @@ def execute_phase_picking(ctx):
             for task in tasks:
                 futures[executor.submit(process_station_worker, task)] = task
         
-            for future in as_completed(futures):
+            for future in tqdm(as_completed(futures), total=len(futures), desc=f"Phase Picking ({current_year}, day {day:03d})"):
                 df_station, worker_logs = future.result()
             
                 for msg in worker_logs:
@@ -544,6 +545,8 @@ def run_sort_picks(ctx):
 
 def generate_combined_plots(df_plot, output_dir):
     """Generates a single PDF file containing 5 combined subplots from the aggregated data."""
+    import matplotlib
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     SINGLE_PDF_FILE = "combined_analysis_report.pdf"
@@ -681,7 +684,7 @@ def analyze_data_by_threshold(ctx):
                 
     if not found_any_data:
         print("\n--- NO DATA FOUND ---")
-        print(f"Could not find '{FILE_NAME}' in any subdirectory starting with 'output_picks_' under '{BASE_DIRECTORY}'.")
+        print(f"Could not find '{PRIMARY_FILE}' or '{LEGACY_FILE}' in any subdirectory starting with 'output_picks_' under '{BASE_DIRECTORY}'.")
         return
 
     df_plot = pd.DataFrame(plot_data)

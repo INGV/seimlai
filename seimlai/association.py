@@ -25,6 +25,8 @@ import pandas as pd
 import numpy as np
 from collections import Counter
 from tqdm import tqdm
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
@@ -133,6 +135,19 @@ def run(ctx):
     # Ensure both id columns are strings to prevent merge errors in GaMMA
     pick_df["id"] = pick_df["id"].astype(str)
     station_df["id"] = station_df["id"].astype(str)
+
+    phase_counts = pick_df.groupby(["id", "type"]).size().unstack(fill_value=0)
+    print(f"GaMMA input: {len(pick_df)} picks from {pick_df['id'].nunique()} stations; "
+          f"{station_df['id'].nunique()} stations in station metadata")
+    print("Picks per station and phase:")
+    print(phase_counts.to_string())
+    print("GaMMA settings: " + ", ".join(
+        f"{key}={config[key]}" for key in (
+            "method", "use_dbscan", "dbscan_eps", "dbscan_min_samples", "use_amplitude",
+            "min_picks_per_eq", "min_p_picks_per_eq", "min_s_picks_per_eq",
+            "max_sigma11", "max_sigma22", "max_sigma12",
+        )
+    ))
     
     catalogs, assignments = association(pick_df, station_df, config, method=config["method"])
     catalog = pd.DataFrame(catalogs)
@@ -141,7 +156,10 @@ def run(ctx):
         print(f"  Input picks: {len(pick_df)}")
         matched = pick_df["id"].isin(station_df["id"]).sum()
         print(f"  Picks matching a station: {matched}/{len(pick_df)}")
-        print("  Check that pick station IDs match station_df IDs.")
+        if matched < len(pick_df):
+            print("  Check that pick station IDs match station_df IDs.")
+        else:
+            print("  Station IDs match; check station coverage, pick timing and GaMMA settings.")
         raise SystemExit(1)
     assignments = pd.DataFrame(assignments, columns=["pick_idx", "event_idx", "prob_gamma"])
     

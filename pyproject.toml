@@ -22,6 +22,12 @@ dependencies = [
     "tqdm",
 ]
 
+[project.optional-dependencies]
+gui = [
+    "nicegui",
+    "watchdog",
+]
+
 [project.scripts]
 seismic-workflow = "seimlai.main:main"
 
@@ -29,4 +35,4 @@ seismic-workflow = "seimlai.main:main"
 include = ["seimlai*"]
 
 [tool.setuptools.package-data]
-seimlai = ["logo/clilogo.txt"]
+seimlai = ["logo/clilogo.txt", "gui/static/*.css", "gui/static/*.svg", "gui/static/*.js", "gui/static/fonts/*.ttf", "gui/static/fonts/*.txt"]

@@ -1,0 +1,954 @@
+@font-face {
+    font-family: Inter;
+    src: url('/seimlai-assets/fonts/Inter.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('/seimlai-assets/fonts/JetBrainsMono.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 100 800;
+    font-display: swap;
+}
+
+body.seimlai-theme {
+    --seimlai-font-ui: Inter, system-ui, sans-serif;
+    --seimlai-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --seimlai-space-1: 4px;
+    --seimlai-space-2: 8px;
+    --seimlai-space-3: 12px;
+    --seimlai-space-4: 16px;
+    --seimlai-space-6: 24px;
+    --seimlai-radius-sm: 6px;
+    --seimlai-radius-md: 8px;
+    --seimlai-radius-lg: 12px;
+    --seimlai-control-height: 40px;
+    --seimlai-bg: #f8fafc;
+    --seimlai-surface: #ffffff;
+    --seimlai-surface-muted: #f1f5f9;
+    --seimlai-overlay: rgb(255 255 255 / 95%);
+    --seimlai-border: #e2e8f0;
+    --seimlai-border-strong: #cbd5e1;
+    --seimlai-text: #0f172a;
+    --seimlai-text-secondary: #475569;
+    --seimlai-text-muted: #64748b;
+    --seimlai-primary: #4f46e5;
+    --seimlai-primary-text: #4338ca;
+    --seimlai-primary-soft: #eef2ff;
+    --seimlai-success: #047857;
+    --seimlai-success-text: #047857;
+    --seimlai-success-soft: #ecfdf5;
+    --seimlai-warning: #b45309;
+    --seimlai-warning-text: #b45309;
+    --seimlai-warning-soft: #fffbeb;
+    --seimlai-error: #b91c1c;
+    --seimlai-error-text: #b91c1c;
+    --seimlai-error-soft: #fef2f2;
+    --seimlai-running: var(--seimlai-primary);
+    --seimlai-running-text: var(--seimlai-primary-text);
+    --seimlai-skipped: var(--seimlai-text-muted);
+    --seimlai-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+    color-scheme: light;
+    background-color: var(--seimlai-bg);
+    color: var(--seimlai-text);
+    font-family: var(--seimlai-font-ui);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+body.seimlai-theme.body--dark {
+    --seimlai-bg: #0b1120;
+    --seimlai-surface: #111c30;
+    --seimlai-surface-muted: #182438;
+    --seimlai-overlay: rgb(17 28 48 / 95%);
+    --seimlai-border: #293548;
+    --seimlai-border-strong: #475569;
+    --seimlai-text: #e2e8f0;
+    --seimlai-text-secondary: #cbd5e1;
+    --seimlai-text-muted: #94a3b8;
+    --seimlai-primary-text: #a5b4fc;
+    --seimlai-primary-soft: #232b51;
+    --seimlai-success-text: #34d399;
+    --seimlai-success-soft: #10392f;
+    --seimlai-warning-text: #fbbf24;
+    --seimlai-warning-soft: #3b2d15;
+    --seimlai-error-text: #f87171;
+    --seimlai-error-soft: #41232c;
+    --seimlai-shadow: 0 1px 3px rgb(0 0 0 / 24%);
+    color-scheme: dark;
+}
+
+body.seimlai-theme :is(.q-card, .q-menu, .q-dialog__inner > div) {
+    background-color: var(--seimlai-surface);
+    color: var(--seimlai-text);
+}
+
+body.seimlai-theme .q-field {
+    color: var(--seimlai-text-secondary);
+    font-size: 14px;
+}
+
+body.seimlai-theme .q-field--outlined .q-field__control {
+    border-radius: var(--seimlai-radius-sm);
+    background-color: var(--seimlai-surface);
+}
+
+body.seimlai-theme .q-field--dense:not(.q-textarea) .q-field__control,
+body.seimlai-theme .q-field--dense .q-field__marginal {
+    min-height: var(--seimlai-control-height);
+}
+
+body.seimlai-theme .q-field:not(.q-field--disabled):not(.q-field--error) .q-field__control:hover::before {
+    border-color: var(--seimlai-text-muted);
+}
+
+body.seimlai-theme .q-field__control::before {
+    border-color: var(--seimlai-border-strong);
+}
+
+body.seimlai-theme .q-field--focused .q-field__control::after {
+    border-color: var(--seimlai-primary-text);
+}
+
+body.seimlai-theme .q-field--error .q-field__control::after {
+    border-color: var(--seimlai-error-text);
+}
+
+body.seimlai-theme .q-field__label {
+    color: var(--seimlai-text-secondary);
+}
+
+body.seimlai-theme .q-separator {
+    background-color: var(--seimlai-border);
+}
+
+body.seimlai-theme .q-btn {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+body.seimlai-theme .q-btn:not(.q-btn--round) {
+    min-height: var(--seimlai-control-height);
+    border-radius: var(--seimlai-radius-sm);
+    padding: var(--seimlai-space-2) 14px;
+}
+
+body.seimlai-theme .q-btn--round {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+body.seimlai-theme .q-btn--outline::before {
+    border-color: var(--seimlai-border-strong);
+}
+
+body.seimlai-theme .q-btn--outline.text-negative::before {
+    border-color: var(--seimlai-error-text);
+}
+
+body.seimlai-theme .q-btn:focus-visible {
+    outline: 2px solid var(--seimlai-primary-text);
+    outline-offset: 2px;
+}
+
+body.seimlai-theme .q-btn .q-icon {
+    font-size: 20px;
+}
+
+body.seimlai-theme .q-btn.seimlai-section-link {
+    min-height: 28px;
+    padding: var(--seimlai-space-1) var(--seimlai-space-2);
+    font-size: 12px;
+}
+
+body.seimlai-theme .q-badge {
+    padding: var(--seimlai-space-1) var(--seimlai-space-2);
+    border-radius: var(--seimlai-radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+body.seimlai-theme :is(.seimlai-alert, .q-notification) {
+    padding: var(--seimlai-space-3) var(--seimlai-space-4);
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-md);
+    line-height: 1.5;
+}
+
+body.seimlai-theme .seimlai-alert-info {
+    background-color: var(--seimlai-primary-soft);
+    color: var(--seimlai-primary-text);
+    border-color: color-mix(in srgb, var(--seimlai-primary-text) 30%, var(--seimlai-border));
+}
+
+body.seimlai-theme .seimlai-alert-error {
+    background-color: var(--seimlai-error-soft);
+    color: var(--seimlai-error-text);
+    border-color: color-mix(in srgb, var(--seimlai-error-text) 30%, var(--seimlai-border));
+}
+
+body.seimlai-theme .q-notification {
+    font-family: var(--seimlai-font-ui);
+    font-size: 13px;
+    box-shadow: var(--seimlai-shadow);
+}
+
+body.seimlai-theme .nicegui-content {
+    padding: 0;
+    gap: 0;
+}
+
+body.seimlai-theme .seimlai-header {
+    padding: 0;
+    gap: 0;
+    background-color: var(--seimlai-surface);
+    color: var(--seimlai-text);
+    border-bottom: 1px solid var(--seimlai-border);
+    box-shadow: none;
+}
+
+body.seimlai-theme .seimlai-header-bar {
+    width: 100%;
+    height: 64px;
+    padding: 0 var(--seimlai-space-6);
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+}
+
+body.seimlai-theme .seimlai-brand {
+    min-width: 0;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: var(--seimlai-space-3);
+}
+
+body.seimlai-theme .seimlai-brand-mark {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+body.seimlai-theme .seimlai-brand-name {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+body.seimlai-theme .seimlai-brand-description {
+    padding-left: var(--seimlai-space-4);
+    border-left: 1px solid var(--seimlai-border-strong);
+    color: var(--seimlai-text-muted);
+    white-space: nowrap;
+}
+
+body.seimlai-theme .seimlai-theme-toggle {
+    flex-shrink: 0;
+    color: var(--seimlai-text-secondary);
+}
+
+body.seimlai-theme .seimlai-nav {
+    width: 100%;
+    height: 48px;
+    padding: 0 var(--seimlai-space-6);
+    border-top: 1px solid var(--seimlai-border);
+    color: var(--seimlai-text-secondary);
+}
+
+body.seimlai-theme .seimlai-nav .q-tab {
+    min-height: 48px;
+    padding: 0 var(--seimlai-space-4);
+    text-transform: none;
+}
+
+body.seimlai-theme .seimlai-nav .q-tab--inactive {
+    opacity: 1;
+}
+
+body.seimlai-theme .seimlai-nav .q-tab__icon {
+    font-size: 20px;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+body.seimlai-theme .seimlai-nav .q-tab:focus-visible {
+    outline: 2px solid var(--seimlai-primary-text);
+    outline-offset: -4px;
+}
+
+body.seimlai-theme .seimlai-panels {
+    min-height: calc(100vh - 113px);
+    background-color: var(--seimlai-bg);
+}
+
+body.seimlai-theme .seimlai-runner {
+    gap: var(--seimlai-space-6);
+}
+
+body.seimlai-theme .seimlai-runner-title,
+body.seimlai-theme .seimlai-full-logs-title {
+    font-size: 24px;
+    line-height: 1.3;
+    font-weight: 650;
+    letter-spacing: -0.5px;
+}
+
+body.seimlai-theme .seimlai-runner-status {
+    font-size: 28px;
+}
+
+body.seimlai-theme .seimlai-runner-toolbar {
+    padding: var(--seimlai-space-3) var(--seimlai-space-4);
+    background-color: var(--seimlai-surface);
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-md);
+    gap: var(--seimlai-space-3);
+}
+
+body.seimlai-theme .seimlai-runner-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.43fr) minmax(0, 0.57fr);
+    align-items: start;
+    gap: var(--seimlai-space-4);
+}
+
+body.seimlai-theme :is(.seimlai-runner-stages, .seimlai-runner-console, .seimlai-stage-details) {
+    min-width: 0;
+}
+
+body.seimlai-theme .seimlai-runner-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--seimlai-text-secondary);
+}
+
+body.seimlai-theme .seimlai-stage-card {
+    padding: var(--seimlai-space-3);
+    gap: var(--seimlai-space-2);
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-md);
+    box-shadow: none;
+}
+
+body.seimlai-theme .seimlai-stage-card[data-state="running"] {
+    border-color: var(--seimlai-primary-text);
+}
+
+body.seimlai-theme .seimlai-stage-card .seimlai-stage-index {
+    min-width: 36px;
+    height: 36px;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+body.seimlai-theme .seimlai-stage-title {
+    overflow-wrap: anywhere;
+}
+
+body.seimlai-theme .seimlai-stage-state {
+    flex-shrink: 0;
+}
+
+body.seimlai-theme .seimlai-stage-progress {
+    padding-left: 48px;
+}
+
+body.seimlai-theme .seimlai-console {
+    gap: 0;
+    padding: 0;
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-lg);
+    background-color: var(--seimlai-surface);
+    color: var(--seimlai-text);
+    overflow: hidden;
+}
+
+body.seimlai-theme .seimlai-console-toolbar {
+    padding: var(--seimlai-space-3);
+    gap: var(--seimlai-space-3);
+    border-bottom: 1px solid var(--seimlai-border);
+    font-size: 13px;
+}
+
+body.seimlai-theme .seimlai-console-actions {
+    margin-left: auto;
+}
+
+body.seimlai-theme .seimlai-console-filter {
+    width: 176px;
+}
+
+body.seimlai-theme .seimlai-console-body .q-scrollarea__content {
+    padding: var(--seimlai-space-3);
+}
+
+body.seimlai-theme .seimlai-log-line {
+    width: 100%;
+    font-family: var(--seimlai-font-mono);
+    font-size: 12px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+body.seimlai-theme .seimlai-log-default {
+    color: var(--seimlai-text-secondary);
+}
+
+body.seimlai-theme .seimlai-log-skipped {
+    color: var(--seimlai-text-muted);
+}
+
+body.seimlai-theme :is(.seimlai-log-running, .seimlai-log-section) {
+    color: var(--seimlai-running-text);
+    font-weight: 500;
+}
+
+body.seimlai-theme .seimlai-log-success {
+    color: var(--seimlai-success-text);
+}
+
+body.seimlai-theme .seimlai-log-warning {
+    color: var(--seimlai-warning-text);
+}
+
+body.seimlai-theme .seimlai-log-error {
+    color: var(--seimlai-error-text);
+    font-weight: 500;
+}
+
+body.seimlai-theme .seimlai-full-logs {
+    height: calc(100vh - 153px);
+    height: calc(100dvh - 153px);
+    min-height: 480px;
+    gap: var(--seimlai-space-4);
+}
+
+body.seimlai-theme .seimlai-full-logs-heading,
+body.seimlai-theme .seimlai-full-logs .seimlai-console-toolbar {
+    flex-shrink: 0;
+}
+
+body.seimlai-theme .seimlai-full-logs > .seimlai-console,
+body.seimlai-theme .seimlai-full-logs .seimlai-console-body {
+    flex: 1;
+    min-height: 0;
+}
+
+body.seimlai-theme .seimlai-full-logs .seimlai-console-filter {
+    width: min(360px, 40vw);
+}
+
+body.seimlai-theme .seimlai-config {
+    --seimlai-config-nav-height: 56px;
+    max-width: 1600px;
+    margin-inline: auto;
+    padding-bottom: var(--seimlai-space-4);
+}
+
+body.seimlai-theme .seimlai-config-title {
+    font-size: 24px;
+    line-height: 1.3;
+    font-weight: 650;
+    letter-spacing: -0.5px;
+}
+
+body.seimlai-theme .seimlai-config-nav {
+    display: flex;
+    position: sticky;
+    top: calc(113px + var(--seimlai-space-2));
+    z-index: 20;
+    height: var(--seimlai-config-nav-height);
+    gap: var(--seimlai-space-1);
+    align-items: center;
+    overflow-x: auto;
+    background-color: var(--seimlai-surface);
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-md);
+    padding-inline: var(--seimlai-space-2);
+    scrollbar-width: thin;
+}
+
+body.seimlai-theme .seimlai-config-nav .q-btn.seimlai-section-link {
+    height: var(--seimlai-control-height);
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+body.seimlai-theme .seimlai-config-nav .q-icon {
+    font-size: 18px;
+}
+
+body.seimlai-theme .seimlai-config-nav [aria-current="location"]::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: var(--seimlai-space-2);
+    right: var(--seimlai-space-2);
+    height: 2px;
+    background-color: var(--seimlai-primary-text);
+}
+
+body.seimlai-theme .seimlai-config-section {
+    padding: var(--seimlai-space-6);
+    gap: var(--seimlai-space-4);
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-md);
+    box-shadow: none;
+    scroll-margin-top: calc(var(--seimlai-config-nav-height) + 24px);
+}
+
+body.seimlai-theme .seimlai-config-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+body.seimlai-theme .seimlai-form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--seimlai-space-4);
+    align-items: start;
+}
+
+body.seimlai-theme .seimlai-form-grid > :is(.q-field, .q-toggle, .nicegui-column) {
+    grid-column: span 3;
+    min-width: 0;
+    width: 100%;
+}
+
+body.seimlai-theme .seimlai-form-grid-2 > :is(.q-field, .nicegui-column),
+body.seimlai-theme .seimlai-form-grid > .seimlai-field-wide {
+    grid-column: span 6;
+}
+
+body.seimlai-theme .seimlai-form-grid-3 > .q-field {
+    grid-column: span 4;
+}
+
+body.seimlai-theme .seimlai-case-grid > :first-child {
+    grid-column: span 4;
+}
+
+body.seimlai-theme .seimlai-case-grid > :last-child {
+    grid-column: span 8;
+}
+
+body.seimlai-theme .seimlai-model-grid > .q-field {
+    grid-column: span 2;
+}
+
+body.seimlai-theme .seimlai-model-grid > .q-field:last-child {
+    grid-column: span 6;
+}
+
+body.seimlai-theme .seimlai-form-grid > .seimlai-field-full {
+    grid-column: 1 / -1;
+}
+
+body.seimlai-theme .seimlai-geography-grid {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.3fr) minmax(0, 0.7fr);
+    gap: var(--seimlai-space-6);
+}
+
+body.seimlai-theme .seimlai-coordinate-fields,
+body.seimlai-theme .seimlai-area-preview {
+    min-width: 0;
+    width: 100%;
+}
+
+body.seimlai-theme .seimlai-area-preview {
+    isolation: isolate;
+}
+
+body.seimlai-theme .seimlai-coordinate-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--seimlai-space-3);
+}
+
+body.seimlai-theme .seimlai-coordinate-fields > :not(.q-field) {
+    grid-column: 1 / -1;
+}
+
+body.seimlai-theme .seimlai-config-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    justify-content: flex-end;
+    padding: var(--seimlai-space-3) var(--seimlai-space-4);
+    background-color: var(--seimlai-overlay);
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-md);
+    box-shadow: var(--seimlai-shadow);
+}
+
+body.seimlai-theme .seimlai-config-actions .q-badge {
+    margin-right: auto;
+}
+
+body.seimlai-theme .seimlai-live-map {
+    border: 1px solid var(--seimlai-border);
+    border-radius: var(--seimlai-radius-lg);
+    background-color: var(--seimlai-surface-muted);
+    isolation: isolate;
+}
+
+body.seimlai-theme .seimlai-map-toolbar {
+    position: absolute;
+    top: var(--seimlai-space-3);
+    left: var(--seimlai-space-3);
+    right: var(--seimlai-space-3);
+    z-index: 1000;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--seimlai-space-3);
+    pointer-events: none;
+}
+
+body.seimlai-theme .seimlai-map-overlay {
+    padding: var(--seimlai-space-2) var(--seimlai-space-3);
+    background-color: var(--seimlai-overlay);
+    color: var(--seimlai-text-secondary);
+    border: 1px solid var(--seimlai-border-strong);
+    border-radius: var(--seimlai-radius-md);
+    box-shadow: var(--seimlai-shadow);
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+}
+
+body.seimlai-theme .seimlai-map-controls {
+    flex-wrap: nowrap;
+}
+
+body.seimlai-theme .seimlai-map-catalog {
+    width: 160px;
+}
+
+body.seimlai-theme .seimlai-map-basemap {
+    width: 192px;
+}
+
+body.seimlai-theme .seimlai-map-summary {
+    margin-left: auto;
+    flex-wrap: nowrap;
+}
+
+body.seimlai-theme .seimlai-map-legend {
+    position: absolute;
+    left: var(--seimlai-space-3);
+    bottom: var(--seimlai-space-6);
+    z-index: 1000;
+    max-width: calc(100% - 24px);
+    font-size: 12px;
+}
+
+body.seimlai-theme .seimlai-map-legend > .nicegui-row {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+body.seimlai-theme .seimlai-depth-dot {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--seimlai-text-muted);
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-control-zoom {
+    margin-top: 80px;
+    margin-left: var(--seimlai-space-3);
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-bar {
+    border: 1px solid var(--seimlai-border-strong);
+    border-radius: var(--seimlai-radius-md);
+    box-shadow: var(--seimlai-shadow);
+    overflow: hidden;
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-bar a {
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-bar a.leaflet-disabled {
+    color: var(--seimlai-text-muted);
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-bar a:focus-visible {
+    outline: 2px solid var(--seimlai-primary-text);
+    outline-offset: -3px;
+}
+
+body.seimlai-theme .seimlai-live-map :is(.leaflet-tooltip, .leaflet-popup-content-wrapper, .leaflet-control-layers) {
+    border: 1px solid var(--seimlai-border-strong);
+    border-radius: var(--seimlai-radius-md);
+    box-shadow: var(--seimlai-shadow);
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-tooltip {
+    padding: var(--seimlai-space-2) var(--seimlai-space-3);
+    font-family: var(--seimlai-font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    width: max-content;
+    max-width: min(320px, calc(100vw - 32px));
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-tooltip b {
+    font-family: var(--seimlai-font-ui);
+    font-weight: 600;
+}
+
+body.seimlai-theme .seimlai-live-map .leaflet-popup-content {
+    margin: var(--seimlai-space-3);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+body.seimlai-theme .seimlai-live-map:fullscreen {
+    border: 0;
+    border-radius: 0;
+    height: 100vh;
+}
+
+@media (max-width: 600px) {
+    body.seimlai-theme .seimlai-map-controls {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+        width: 100%;
+    }
+
+    body.seimlai-theme .seimlai-map-controls > .q-icon {
+        display: none;
+    }
+
+    body.seimlai-theme :is(.seimlai-map-catalog, .seimlai-map-basemap) {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 1100px) {
+    body.seimlai-theme .seimlai-config .seimlai-form-grid > :is(.q-field, .q-toggle, .nicegui-column) {
+        grid-column: span 6;
+    }
+
+    body.seimlai-theme .seimlai-config .seimlai-form-grid > .seimlai-field-full {
+        grid-column: 1 / -1;
+    }
+
+    body.seimlai-theme .seimlai-geography-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 700px) {
+    body.seimlai-theme .seimlai-config .seimlai-form-grid > :is(.q-field, .q-toggle, .nicegui-column) {
+        grid-column: 1 / -1;
+    }
+
+    body.seimlai-theme .seimlai-config-section {
+        padding: var(--seimlai-space-4);
+    }
+}
+
+@media (max-width: 1100px) {
+    body.seimlai-theme .seimlai-runner-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 800px) {
+    body.seimlai-theme .seimlai-brand-description {
+        display: none;
+    }
+
+    body.seimlai-theme :is(.seimlai-header-bar, .seimlai-nav) {
+        padding-left: var(--seimlai-space-3);
+        padding-right: var(--seimlai-space-3);
+    }
+}
+
+body.seimlai-theme :is(.leaflet-container, .leaflet-bar a, .leaflet-control-layers,
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-tooltip, .leaflet-control-attribution) {
+    background-color: var(--seimlai-surface);
+    color: var(--seimlai-text);
+    font-family: var(--seimlai-font-ui);
+}
+
+body.seimlai-theme :is(.leaflet-bar, .leaflet-bar a, .leaflet-tooltip) {
+    border-color: var(--seimlai-border-strong);
+}
+
+body.seimlai-theme .leaflet-bar a:hover {
+    background-color: var(--seimlai-surface-muted);
+}
+
+body.seimlai-theme .leaflet-control-attribution a {
+    color: var(--seimlai-primary-text);
+}
+
+body.seimlai-theme .leaflet-tooltip-top::before {
+    border-top-color: var(--seimlai-surface);
+}
+
+body.seimlai-theme .leaflet-tooltip-bottom::before {
+    border-bottom-color: var(--seimlai-surface);
+}
+
+body.seimlai-theme .leaflet-tooltip-left::before {
+    border-left-color: var(--seimlai-surface);
+}
+
+body.seimlai-theme .leaflet-tooltip-right::before {
+    border-right-color: var(--seimlai-surface);
+}
+
+/* Bridge existing utility colors to tokens until each view receives its redesign.
+   The first layer's important rules also override Quasar's important utilities. */
+@layer theme {
+    /* Keep configuration stickies relative to document scrolling. */
+    body.seimlai-theme .seimlai-panels:has(.seimlai-config),
+    body.seimlai-theme .seimlai-panels:has(.seimlai-config) > .q-panel {
+        overflow: clip visible !important;
+    }
+
+    body.seimlai-theme .seimlai-config-nav [aria-current="location"] {
+        color: var(--seimlai-primary-text) !important;
+    }
+
+    body.seimlai-theme .seimlai-config-section > .nicegui-row:first-child > .q-badge,
+    body.seimlai-theme .seimlai-config .q-badge.seimlai-coordinate-readout {
+        background-color: transparent !important;
+        color: var(--seimlai-text-muted) !important;
+        padding-inline: 0 !important;
+        font-size: 11px !important;
+    }
+
+    body.seimlai-theme :is(.bg-white, .bg-slate-900) {
+        background-color: var(--seimlai-surface) !important;
+    }
+
+    body.seimlai-theme .bg-slate-50 {
+        background-color: var(--seimlai-bg) !important;
+    }
+
+    body.seimlai-theme .bg-slate-100 {
+        background-color: var(--seimlai-surface-muted) !important;
+    }
+
+    body.seimlai-theme .bg-white\/95 {
+        background-color: var(--seimlai-overlay) !important;
+    }
+
+    body.seimlai-theme :is(.text-slate-100, .text-slate-800, .text-slate-900, .text-gray-800),
+    body.seimlai-theme .q-header.text-white,
+    body.seimlai-theme .q-header .text-white {
+        color: var(--seimlai-text) !important;
+    }
+
+    body.seimlai-theme :is(.text-slate-300, .text-slate-600, .text-slate-700, .text-gray-600, .text-gray-700) {
+        color: var(--seimlai-text-secondary) !important;
+    }
+
+    body.seimlai-theme :is(.text-slate-400, .text-slate-500, .text-gray-300, .text-gray-400, .text-gray-500) {
+        color: var(--seimlai-text-muted) !important;
+    }
+
+    body.seimlai-theme :is(.border-gray-100, .border-slate-200, .border-slate-700) {
+        border-color: var(--seimlai-border) !important;
+    }
+
+    body.seimlai-theme .border-slate-300 {
+        border-color: var(--seimlai-border-strong) !important;
+    }
+
+    body.seimlai-theme :is(.text-primary, .text-blue-500, .text-blue-600, .text-blue-900, .text-cyan-300, .text-cyan-400) {
+        color: var(--seimlai-primary-text) !important;
+    }
+
+    body.seimlai-theme .bg-blue-50\/80 {
+        background-color: var(--seimlai-primary-soft) !important;
+    }
+
+    body.seimlai-theme .border-blue-200 {
+        border-color: var(--seimlai-primary-text) !important;
+    }
+
+    body.seimlai-theme :is(.text-positive, .text-emerald-400, .text-emerald-500, .text-green-500) {
+        color: var(--seimlai-success-text) !important;
+    }
+
+    body.seimlai-theme :is(.text-negative, .text-red-500, .text-red-600, .text-rose-400) {
+        color: var(--seimlai-error-text) !important;
+    }
+
+    body.seimlai-theme :is(.text-warning, .text-amber-300) {
+        color: var(--seimlai-warning-text) !important;
+    }
+
+    body.seimlai-theme .q-badge:is(.bg-primary, .bg-info, .bg-blue, .bg-blue-7, .bg-blue-8),
+    body.seimlai-theme .q-notification.bg-info {
+        background-color: var(--seimlai-primary-soft) !important;
+        color: var(--seimlai-running-text) !important;
+    }
+
+    body.seimlai-theme .q-badge:is(.bg-positive, .bg-green),
+    body.seimlai-theme .q-notification.bg-positive {
+        background-color: var(--seimlai-success-soft) !important;
+        color: var(--seimlai-success-text) !important;
+    }
+
+    body.seimlai-theme .q-badge:is(.bg-negative, .bg-red),
+    body.seimlai-theme .q-notification.bg-negative {
+        background-color: var(--seimlai-error-soft) !important;
+        color: var(--seimlai-error-text) !important;
+    }
+
+    body.seimlai-theme .q-badge:is(.bg-warning, .bg-amber-8),
+    body.seimlai-theme .q-notification.bg-warning {
+        background-color: var(--seimlai-warning-soft) !important;
+        color: var(--seimlai-warning-text) !important;
+    }
+
+    body.seimlai-theme .q-badge:is(.bg-secondary, .bg-grey, .bg-grey-5, .bg-slate-200, .bg-slate-700) {
+        background-color: var(--seimlai-surface-muted) !important;
+        color: var(--seimlai-text-secondary) !important;
+    }
+
+    body.seimlai-theme :is(.q-field__native, .q-field__input, .q-field__marginal, .q-checkbox__label) {
+        color: var(--seimlai-text) !important;
+    }
+
+    body.seimlai-theme .q-checkbox__inner {
+        color: var(--seimlai-text-muted) !important;
+    }
+
+    body.seimlai-theme .q-checkbox__inner--truthy {
+        color: var(--seimlai-primary) !important;
+    }
+
+    body.seimlai-theme :is(.font-mono, code, pre, textarea.q-field__native) {
+        font-family: var(--seimlai-font-mono) !important;
+    }
+
+    body.seimlai-theme textarea.q-field__native {
+        background-color: var(--seimlai-surface) !important;
+    }
+}

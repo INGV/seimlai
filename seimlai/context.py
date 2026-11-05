@@ -366,6 +366,15 @@ def validate_config(raw: dict[str, Any]) -> None:
         raise ValueError("Missing configuration keys: " + ", ".join(missing))
 
 
+def case_study_root(case_study: dict[str, Any]) -> Path:
+    base_dir = Path.cwd()
+    if case_study["personal_folder"]:
+        return Path(case_study["personal_folder"])
+    new_root = base_dir / "case_studies" / case_study["name"]
+    legacy_root = base_dir / case_study["name"]
+    return legacy_root if legacy_root.is_dir() and not new_root.exists() else new_root
+
+
 def build_context(config_path: str | Path = "user_configuration/config.yaml") -> RuntimeContext:
     config_path = Path(config_path)
     raw_dict = load_config(config_path)
@@ -399,7 +408,7 @@ def build_context(config_path: str | Path = "user_configuration/config.yaml") ->
     thr = f"{int(p_threshold * 10):02d}-{int(s_threshold * 10):02d}"
 
     base_dir = Path.cwd()
-    project_root = Path(raw.case_study["personal_folder"]) if raw.case_study["personal_folder"] else base_dir / raw.case_study["name"]
+    project_root = case_study_root(raw.case_study)
     archive_dir = project_root / "archive"
     output_base = project_root / "output"
     threshold_dir = output_base / f"threshold_p{p_threshold}_s{s_threshold}"
@@ -498,7 +507,9 @@ def _build_gamma_config(gamma: dict[str, Any]) -> dict[str, Any]:
     xlim = tuple(gamma["x_km"])
     ylim = tuple(gamma["y_km"])
     zlim = tuple(gamma["z_km"])
-    method = gamma["method"]
+    # GaMMA uses DBSCAN as a separate pre-clustering option; its association
+    # method accepts only BGMM or GMM.
+    method = "BGMM" if gamma["method"].lower() == "dbscan" else gamma["method"]
     eikonal = gamma["eikonal"]
     filtering = gamma["filtering"]
 

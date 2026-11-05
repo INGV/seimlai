@@ -1,25 +1,24 @@
 case_study:
-  name: case_study #name of the case study folder
+  name: norcia #name of the case study folder
   personal_folder: null # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
   download_data: true # if you want to download the data put true, otherwise put false
 
 geography: #specify the area limits
-  minlatitude: 42.25
-  maxlatitude: 43.12
-  minlongitude: 11.75
-  maxlongitude: 14.00
+  minlatitude: 42.53
+  maxlatitude: 43.1506
+  minlongitude: 11.839
+  maxlongitude: 13.3329
 
 dates: #specify the time window
-  starttime: "2016-10-30"
-  endtime: "2016-10-30"
+  starttime: '2016-10-29'
+  endtime: '2016-10-29'
 
 stations: # specify station information
   network: "*" # put "*" to download all networks
   channel: "BH?,HH?,EH?" #all channel types
   stations_list: "*" # put "*" to download all stations
   fdsn_clients: #specify the clients. In the example multiple clients are specified
-    - IRIS
-    - INGV
+    [IRIS, ingv]
 
 # 03_phase_picking.py - phase picking settings
 model:
@@ -27,8 +26,8 @@ model:
   model_type: original #define a pretrained-model available on Seisbench
   custom_model_path: null #if you have a PyTorch file (.pth), specify its path; otherwise use null
   batch_size: 256 #size of data batches to be processed waveforms
-  p_threshold: 0.5 #threshold decision for P-wave
-  s_threshold: 0.5 #threshold decision for P-wave
+  p_threshold: 0.7 #threshold decision for P-wave
+  s_threshold: 0.7 #threshold decision for P-wave
 
 # 03_phase_picking.py - runtime settings
 phase_picking:

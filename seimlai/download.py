@@ -20,9 +20,12 @@ import os
 import csv
 import glob
 import random
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from datetime import timedelta, datetime
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 import threading
 import sys
 import fcntl
@@ -189,6 +192,7 @@ def _run(ctx):
 
     current_time = starttime
     one_day_seconds = 24 * 60 * 60
+    station_query_succeeded = False
 
     while current_time <= endtime:
         t0 = current_time
@@ -202,6 +206,7 @@ def _run(ctx):
                                              minlongitude=minlongitude, maxlongitude=maxlongitude,
                                              level="response", network=network, channel=channel,
                                              station=stations_list)
+            station_query_succeeded = True
             download_tasks = []
 
             for net in inventory:
@@ -262,9 +267,7 @@ def _run(ctx):
             
                 with ThreadPoolExecutor(max_workers=4) as executor:
                     futures = [executor.submit(process_single_channel, *task) for task in download_tasks]
-                
-
-                    for future in futures:
+                    for future in tqdm(as_completed(futures), total=len(download_tasks), desc=f"Downloading {t0.date}"):
                         future.result()
 
         except Exception as e:
@@ -280,6 +283,11 @@ def _run(ctx):
         log(f"\n Station metadata merged into: {csv_path} ({total_stations} total stations)")
     else:
         log("\n No station metadata collected.")
+
+    if not station_query_succeeded:
+        log("[ERROR] All station requests failed. Check the date range, geographic bounds, station filters, and FDSN providers.")
+        log_file.close()
+        raise RuntimeError("No station requests succeeded; download cannot continue.")
 
 
     # === Plot 3 components from a random station ===
@@ -342,6 +350,7 @@ def _run(ctx):
             plt.tight_layout()
             plot_path = os.path.join(archive_dir, f"waveform_plot_{sta}.pdf")
             plt.savefig(plot_path, format='pdf', dpi=300)
+            plt.close()
             log(f"Plot saved to: {plot_path}")
         else:
             log("Found station folder but could not read traces.")

@@ -44,6 +44,7 @@ The user-editable settings are in [user_configuration/config.yaml](./user_config
 | Command | What it does |
 | --- | --- |
 | `python main.py` | Run the full workflow. |
+| `python main.py --gui` | Launch the interactive graphical user interface (GUI). |
 | `python -m seimlai.main` | Run the full workflow through the package module. |
 | `seismic-workflow` | Run the installed PyPI-style entrypoint. |
 | `python main.py --config user_configuration/config.yaml` | Run the full workflow with an explicit config file. |
@@ -56,6 +57,24 @@ The user-editable settings are in [user_configuration/config.yaml](./user_config
 | `python main.py gamma-analysis` | Run optional GaMMA picking/association analysis. |
 | `python main.py plot-catalog` | Run optional catalog plotting. |
 | `python main.py threshold-analysis` | Run optional threshold comparison plots. |
+
+## Graphical User Interface (GUI)
+
+SeiMLAI includes an interactive graphical user interface (GUI) powered by [NiceGUI](https://nicegui.io/):
+
+```bash
+python main.py --gui
+```
+Or with a custom port and configuration file:
+```bash
+python main.py --gui --port 8080 --config user_configuration/config.yaml
+```
+
+The GUI offers:
+- **Interactive Configuration Editor**: Visual form divided into tabs for each section of `config.yaml` (Case Study, Geography with interactive mini-map preview, Dates, Stations, Deep Learning PhaseNet/EQTransformer thresholds, GaMMA, HypoEllipse, HypoDD, and CC-DD). Provides real-time validation and automatic timestamped backups upon saving.
+- **Pipeline Runner & Real-Time Progress**: Start full or selective pipeline runs (`--from`, `--only`), monitor per-stage progress bars and timers, and view a live streaming log console with auto-scroll and filtering.
+- **Live Interactive Map**: Real-time Leaflet map displaying FDSN stations (blue markers) and localized earthquake hypocenters (color-coded by depth and sized by magnitude). Automatically updates as new catalogs are generated and allows switching between GaMMA, HypoEllipse, and HypoDD catalogs.
+- **Dark & Light Mode**: Toggle dark/light theme on the fly.
 
 
 ## Numbered Workflow Stages

@@ -1,0 +1,223 @@
+case_study:
+  name: case_study #name of the case study folder
+  personal_folder: null # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
+  download_data: true # if you want to download the data put true, otherwise put false
+
+geography: #specify the area limits
+  minlatitude: 42.25
+  maxlatitude: 43.12
+  minlongitude: 11.75
+  maxlongitude: 14.00
+
+dates: #specify the time window
+  starttime: "2016-10-30"
+  endtime: "2016-10-30"
+
+stations: # specify station information
+  network: "*" # put "*" to download all networks
+  channel: "BH?,HH?,EH?" #all channel types
+  stations_list: "*" # put "*" to download all stations
+  fdsn_clients: #specify the clients. In the example multiple clients are specified
+    - IRIS
+    - INGV
+
+# 03_phase_picking.py - phase picking settings
+model:
+  neural_network: PhaseNet #define deep-learing algorithm available on Seisbench
+  model_type: original #define a pretrained-model available on Seisbench
+  custom_model_path: null #if you have a PyTorch file (.pth), specify its path; otherwise use null
+  batch_size: 256 #size of data batches to be processed waveforms
+  p_threshold: 0.5 #threshold decision for P-wave
+  s_threshold: 0.5 #threshold decision for P-wave
+
+# 03_phase_picking.py - runtime settings
+phase_picking:
+  num_workers_cpu_mps: 2 # number of cpu cores to be used for multiprocessing
+  slurm_cpus_default: 4 # number of cpu cores to be used for slurm
+  bandpass_freq_min: 0.5 # minimum frequency of the band-pass filter in Hz
+  bandpass_freq_max: 30.0 # maximum frequency of the band-pass filter in Hz
+
+# 04_association.py #phase association setting
+gamma:
+  dims: #define the dimensions of the volume in which we search for events (UTM coordinates)
+    - x(km)
+    - y(km)
+    - z(km)
+  use_dbscan: true #activate dbscan
+  use_amplitude: true #if you want to compute amplitude, put true
+  x_km:
+    - 230
+    - 620
+  y_km:
+    - 4650
+    - 4800
+  z_km:
+    - 0
+    - 60
+  velocity: #Define P- and S-wave velocities in km/s
+    p: 7.0
+    s: 4.0
+  method: BGMM #Bayesian Gaussian Mixture Model (BGMM) or simple clustering (Dbscan)
+  dbscan_eps: 25 #Cluster radius (distance in km)
+  dbscan_min_samples: 3 #Minimum number of points to form a cluster
+  eikonal: #Eikonal model parameters
+    z: #Depth of the layers in km
+      - 0.0
+      - 5.5
+      - 16.0
+      - 32.0
+    p: #P-wave velocities in km/s
+      - 5.5
+      - 5.5
+      - 6.7
+      - 7.8
+    vp_vs_ratio: 1.73 #vp/vs ratio
+    h: 1.0 #thickness of the layers in km
+  filtering:
+    min_picks_per_eq: 6 #Minimum number of picks per eq
+    min_p_picks_per_eq: 4 #Minimum number of P-picks per eq
+    min_s_picks_per_eq: 3 #Minimum number of S-picks per eq
+    max_sigma11: 1.5 #Maximum sigma11
+    max_sigma22: 1.0 #Maximum sigma22
+    max_sigma12: 1.0 #Maximum sigma12
+
+# gamma-analysis optional command
+analysis:
+  log_filename: picking_analysis.log #name of the log file after phase picking
+
+# plot-catalog optional command
+plotting:
+  gmt_library_path: "" #path to GMT library
+  gmt_grid_path: "@earth_relief_15s" #path to GMT grid
+  region: #area limits for plotting
+    - 12.5
+    - 14.00
+    - 42.00
+    - 43.50
+  map_title: Central Italy - Seismicity
+
+# 05_absolute_location_prep.py
+hypoellipse:
+  h71_min_p: 4 #min number of P-picks per eq
+  h71_min_s: 2 #min number of S-picks per eq
+
+# 06_hypoellipse_check.py
+hypoellipse_check:
+  docker_image: ingv/hypoellipse #docker image for hypocenter location
+  docker_start_timeout_seconds: 90 #docker start timeout in seconds
+
+# 07_location_filtering.py and 08_relative_relocation.py
+dd:
+  max_gap: 180.0 #maximum azimuthal gap in degrees
+  max_rms: 0.8 #maximum root mean square
+  max_erh: 2.0 #maximum horizontal error
+  max_erz: 2.0 #maximum vertical error
+
+# 10_hypodd.py
+hypodd:
+  docker_image: hypodd:2.1b #docker image for hypocenter location
+  docker_start_timeout_seconds: 90 #docker start timeout in seconds
+  dimensions:
+    mode: auto #auto or manual to create the hypodd.inc file. Put manual if you want to specify the problem dimensions
+    # The following parameters are described in the hypoDD.inp file
+    maxeve0: 1
+    maxlay: 14
+    maxcl: 30
+  ph2dt: #parameters for ph2dt.inp file
+    min_weight: 0.0 #minimum weight
+    max_dist_km: 150.0 #maximum distance in km
+    max_sep_km: 10.0 #maximum separation in km
+    max_neighbors: 30 #maximum number of neighbors
+    min_links: 8 #minimum number of links
+    min_observations: 8 #minimum number of observations
+    max_observations: 30 #maximum number of observations
+  relocation: #parameters for hypoDD.inp file (see HypoDD documentation)
+    idat: 3
+    ipha: 3
+    max_dist_km: 50.0
+    obscc: 3
+    obsct: 13
+    min_pair_station_dist: -999
+    max_pair_station_dist: -999
+    max_gap: -999
+    istart: 2
+    isolve: 2
+    iaq: 1
+    cluster_id: 0
+    iteration_sets:
+      - [7, 0.2, 0.2, 10, 10, 1.0, 0.7, 10, 10, 120]
+      - [5, 1.0, 0.7, 9, 8, 1.0, 0.7, 8, 6, 180]
+      - [5, 1.0, 0.7, 8, 6, 0.1, 0.1, 8, 6, 200]
+      - [5, 1.0, 0.7, 6, 4, 0.01, 0.01, 6, 4, 220]
+  velocity_model:
+    top_km:
+      [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 14.0, 16.0]
+    vp_km_s:
+      [
+        5.0,
+        5.15,
+        5.30,
+        5.45,
+        5.60,
+        5.75,
+        5.90,
+        6.05,
+        6.20,
+        6.35,
+        6.50,
+        6.65,
+        6.80,
+        7.0,
+      ]
+    vp_vs_ratio: 1.86
+
+# 09_cc_dd.py  #use cross-correlation to compute differential travel times
+cc_dd:
+  use_gpu: true
+  gpu_batch_size: auto
+
+  max_dist_km_cc: 3.0
+  min_common_picks_per_pair: 8
+  min_readings_per_pair: 4
+
+  cc_threshold: 0.8
+  snr_threshold: 1.0
+  max_abs_dt_seconds: 2.0
+
+  p_win_before: 0.2
+  p_win_after: 1.0
+  p_max_lag: 0.3
+
+  s_win_before: 0.5
+  s_win_after: 1.5
+  s_max_lag: 0.5
+
+  freq_min: 2.0
+  freq_max: 15.0
+  filter_pad_seconds: 1.0
+
+  p_channel: "??Z"
+  s_e_channel: "??E"
+  s_n_channel: "??N"
+  require_both_s_components: true
+
+  peak_edge_margin_seconds: 0.01
+  s_shift_tolerance_seconds: 0.02
+
+  network: "*"
+  worker_count: null
+  chunk_size: null
+
+# threshold-analysis optional command
+threshold_analysis:
+  dpi: 300
+  thresholds_map:
+    01-01: 0.1
+    02-02: 0.2
+    03-03: 0.3
+    04-04: 0.4
+    05-05: 0.5
+    06-06: 0.6
+    07-07: 0.7
+    08-08: 0.8
+    09-09: 0.9

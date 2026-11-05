@@ -5,6 +5,7 @@ Seismic workflow runner.
 
 Usage:
     python main.py
+    python main.py --gui
     python main.py continue
     python main.py 03
     python main.py --from 03
@@ -27,6 +28,12 @@ from dataclasses import dataclass
 from importlib import import_module
 from importlib.resources import files
 from typing import Callable
+
+import os
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+
+import matplotlib
+matplotlib.use("Agg")
 
 from seimlai.context import build_context, ensure_initial_directories
 
@@ -139,6 +146,7 @@ def parse_args():
     epilog = """
 COMMANDS:
   (none)              Run the full workflow.
+  gui                 Launch the interactive web graphical user interface.
   continue            Continue from absolute location (steps 04-05).
   01 ... 05           Run one workflow stage by ID.
   download ... relative-relocation
@@ -185,6 +193,17 @@ EXAMPLES:
         default="user_configuration/config.yaml",
         help="Path to the YAML configuration file.",
     )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the interactive graphical user interface (GUI).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port for the GUI web server (default: 8080).",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--from",
@@ -200,7 +219,7 @@ EXAMPLES:
         help="Run only these step IDs.",
     )
     args = parser.parse_args()
-    valid_commands = {"continue", "clean-archive", *STEP_IDS, *STEP_COMMANDS, *OPTIONAL_STEPS, *LEGACY_STEPS}
+    valid_commands = {"gui", "continue", "clean-archive", *STEP_IDS, *STEP_COMMANDS, *OPTIONAL_STEPS, *LEGACY_STEPS}
     if args.command is not None and args.command not in valid_commands:
         parser.error(f"unknown command '{args.command}'")
     return args
@@ -265,8 +284,71 @@ def run_single_stage(ctx, step_id):
         sys.exit(1)
 
 
+def _ensure_catalog_env():
+    """Ensure the workflow runs inside the conda environment containing obspy, torch, etc."""
+    try:
+        import obspy  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    if os.environ.get("_SEIMLAI_ENV_SWITCHED") == "1":
+        return
+
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    target_py = None
+    conda_exe = shutil.which("conda")
+    if conda_exe:
+        try:
+            res = subprocess.run([conda_exe, "info", "--envs"], capture_output=True, text=True, timeout=5)
+            for line in res.stdout.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 2 and parts[0] in ("catalog", "seismic-workflow"):
+                    candidate = Path(parts[-1]) / "bin" / "python"
+                    if candidate.exists():
+                        target_py = str(candidate)
+                        break
+        except Exception:
+            pass
+
+    if not target_py:
+        candidates = [
+            Path("/opt/homebrew/Caskroom/miniconda/base/envs/catalog/bin/python"),
+            Path(sys.prefix).parent / "catalog" / "bin" / "python",
+            Path.home() / "miniconda3" / "envs" / "catalog" / "bin" / "python",
+            Path.home() / "opt" / "miniconda3" / "envs" / "catalog" / "bin" / "python",
+            Path.home() / ".conda" / "envs" / "catalog" / "bin" / "python",
+        ]
+        for c in candidates:
+            if c.exists():
+                target_py = str(c)
+                break
+
+    if target_py and target_py != sys.executable:
+        print(f"[SeiMLAI] Automatically activating 'catalog' conda environment...")
+        print(f"         Interpreter: {target_py}\n")
+        new_env = os.environ.copy()
+        new_env["_SEIMLAI_ENV_SWITCHED"] = "1"
+        os.execve(target_py, [target_py] + sys.argv, new_env)
+
+
 def _main():
+    _ensure_catalog_env()
     args = parse_args()
+
+    if args.gui or args.command == "gui":
+        try:
+            from seimlai.gui.app import launch_gui
+        except ImportError as exc:
+            print(f"[ERROR] Could not launch GUI: {exc}")
+            print("Please make sure required packages are installed: pip install nicegui watchdog")
+            sys.exit(1)
+        launch_gui(args.config, port=args.port)
+        return
+
     try:
         ctx = build_context(args.config)
     except Exception as exc:

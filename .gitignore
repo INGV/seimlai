@@ -2,3 +2,7 @@ __pycache__/
 .DS_Store
 library_test.py
 layout_test
+*.bak_*.yaml
+*.tmp
+case_study/
+case_studies
