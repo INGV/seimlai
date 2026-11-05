@@ -6,3 +6,8 @@ layout_test
 *.tmp
 case_study/
 case_studies
+.nicegui/
+frontend/node_modules/
+frontend/dist/
+frontend/public/cesium/
+frontend/*.tsbuildinfo

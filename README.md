@@ -77,6 +77,77 @@ The GUI offers:
 - **Dark & Light Mode**: Toggle dark/light theme on the fly.
 
 
+## Independent web interface (React + FastAPI)
+
+The `feature/separate-web-gui` branch adds a separate browser frontend in
+`frontend/` and a Python HTTP/WebSocket API in `seimlai/web/`. The original
+NiceGUI interface remains available with `python main.py --gui`.
+
+Use the existing scientific Python environment (`conda activate catalog`) and
+Node.js 22.12+ or 24. Install the API dependencies once:
+
+```bash
+python -m pip install 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.30,<1'
+```
+
+From the repository root, build the browser frontend:
+
+```bash
+cd frontend
+npm ci
+npm run build
+cd ..
+python -m seimlai.web.app
+```
+
+Open **http://127.0.0.1:8000** for the scroll-driven home, or
+**http://127.0.0.1:8000/app** for the operational workspace. A built frontend is
+served by FastAPI; Node is needed only for installation/build and development.
+After an editable install with `python -m pip install -e '.[web]'`, the API can
+also be launched with `seimlai-web`. This frontend is currently built and served
+from the source checkout, rather than bundled in a Python wheel.
+
+For frontend development, run the API in one terminal and `npm run dev` from
+`frontend/` in another. Vite serves port 5173 and proxies both HTTP and WebSocket
+requests under `/api` to port 8000. `python -m seimlai.web.app --help` lists
+custom configuration, host and port options. Rebuild after frontend changes
+when using the combined server on port 8000.
+
+The workspace includes the five processing stages, continuation/selection and
+utilities, case-study selection, all configuration sections, geographic bounds
+selection, editable/uploadable HypoEllipse and HypoDD templates, live logs and
+a Cesium 3D map. Catalog selection and camera state stay in the browser.
+Configuration and model-file writes detect stale edits; model files retain a
+`.bak` copy. Configuration saves retain the existing YAML comments and
+case-study snapshots through the original configuration service.
+
+**Execution model:** one trusted machine workspace, one pipeline, one API
+process/worker. Browsers intentionally share the saved configuration, active
+case study and execution state. This is not an isolated multiuser job system.
+The API defaults to loopback and has no authentication; remote deployment needs
+an authenticated HTTPS reverse proxy with WebSocket forwarding and preserved
+Host/Origin, before exposing the API beyond the machine. Keep a single worker.
+The scientific services are reused from `seimlai/gui/services/`, without loading
+NiceGUI; the scientific processing code and CLI are unchanged.
+
+**3D depth reference:** event height is `offset_m - depth_km * 1000`, without
+vertical exaggeration. The map starts with a zero offset, treats the ellipsoid
+as the surface and provides a datum offset control. Catalog depth and station
+elevation datums must be checked before interpreting vertical alignment;
+no geoid conversion or topographic terrain is provided. Globe transparency and
+underground camera navigation expose the hypocenters. Basemaps require network
+access; the default viewer does not require a Cesium ion account or token.
+The home animation is explicitly illustrative and is separate from live data.
+
+API contract checks (using the scientific environment with `httpx` installed):
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+These checks use temporary configuration/workspace files and mocked job starts;
+they never download waveforms or execute the scientific pipeline.
+
 ## Numbered Workflow Stages
 
 | ID | Command | What it does |
