@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+case "${1:-}" in
+    frontend)
+        cd frontend
+        if ! command -v npm >/dev/null 2>&1; then
+            echo "Install Node.js 22.12+ or 24 (including npm), then try again." >&2
+            exit 1
+        fi
+        if [[ ! -d node_modules ]]; then
+            npm ci
+        fi
+        exec npm run dev -- --port 5173 --strictPort --open /
+        ;;
+    backend)
+        ;;
+    ""|-h|--help)
+        echo "Start in two terminals:"
+        echo "  ./open-seimlai backend"
+        echo "  ./open-seimlai frontend"
+        echo "Homepage: http://127.0.0.1:5173/"
+        echo "Stop each service with Ctrl+C in its terminal."
+        exit 0
+        ;;
+    *)
+        echo "Usage: $0 {backend|frontend}" >&2
+        exit 1
+        ;;
+esac
+
+CONDA_EXE="$(command -v conda || true)"
+if [[ -z "$CONDA_EXE" ]]; then
+    for candidate in \
+        "$HOME/miniconda3/bin/conda" \
+        "$HOME/anaconda3/bin/conda" \
+        "$HOME/opt/miniconda3/bin/conda" \
+        "/opt/homebrew/Caskroom/miniconda/base/bin/conda"; do
+        if [[ -x "$candidate" ]]; then
+            CONDA_EXE="$candidate"
+            break
+        fi
+    done
+fi
+
+if [[ -z "$CONDA_EXE" ]]; then
+    echo "Conda was not found." >&2
+    exit 1
+fi
+
+if ! "$CONDA_EXE" env list | awk '{print $1}' | grep -qx catalog; then
+    echo "Conda environment 'catalog' was not found." >&2
+    exit 1
+fi
+
+# Activate before exec so the API and pipeline subprocesses share the toolchain.
+eval "$("$CONDA_EXE" shell.bash hook)"
+conda activate catalog
+exec python -m seimlai.web.app --host 127.0.0.1 --port 8000

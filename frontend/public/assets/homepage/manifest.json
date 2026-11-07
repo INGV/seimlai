@@ -1,0 +1,64 @@
+{
+  "source": "assets/frames for homepage",
+  "sourcePattern": "{part}/ezgif-frame-{frame:03}.jpg",
+  "sourceCounts": {
+    "part1": 300,
+    "part2": 300,
+    "part3": 120,
+    "part4": 10
+  },
+  "sourceSize": [
+    1920,
+    1080
+  ],
+  "desktopSize": [
+    1280,
+    720
+  ],
+  "mobileSize": [
+    768,
+    432
+  ],
+  "sampleEvery": 2,
+  "includeEndpoints": true,
+  "lastFrames": {
+    "part1": 300,
+    "part2": 300,
+    "part3": 120,
+    "part4": 10
+  },
+  "format": "webp",
+  "mobileFrames": [
+    [
+      "part1",
+      151
+    ],
+    [
+      "part2",
+      71
+    ],
+    [
+      "part2",
+      181
+    ],
+    [
+      "part2",
+      291
+    ],
+    [
+      "part3",
+      80
+    ]
+  ],
+  "sampleEveryByPart": {
+    "part1": 2,
+    "part2": 2,
+    "part3": 2,
+    "part4": 1
+  },
+  "mobileSequence": "mobile/{part}/{frame:03}.webp",
+  "finalFrame": [
+    "part4",
+    10
+  ]
+}

@@ -83,35 +83,82 @@ The `feature/separate-web-gui` branch adds a separate browser frontend in
 `frontend/` and a Python HTTP/WebSocket API in `seimlai/web/`. The original
 NiceGUI interface remains available with `python main.py --gui`.
 
-Use the existing scientific Python environment (`conda activate catalog`) and
-Node.js 22.12+ or 24. Install the API dependencies once:
+### Easy start: two terminals
+
+Use the scientific Conda environment named `catalog` and Node.js 22.12+ or 24.
+If the environment has not been installed yet, create it with
+`conda env update -n catalog -f environment.yml`. Install the API dependencies once:
 
 ```bash
-python -m pip install 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.30,<1'
+conda run -n catalog python -m pip install 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.30,<1'
 ```
 
-From the repository root, build the browser frontend:
+From the repository root, start the backend in terminal 1:
 
 ```bash
-cd frontend
-npm ci
-npm run build
-cd ..
-python -m seimlai.web.app
+./open-seimlai backend
 ```
 
-Open **http://127.0.0.1:8000** for the scroll-driven home, or
-**http://127.0.0.1:8000/app** for the operational workspace. A built frontend is
-served by FastAPI; Node is needed only for installation/build and development.
-After an editable install with `python -m pip install -e '.[web]'`, the API can
-also be launched with `seimlai-web`. This frontend is currently built and served
-from the source checkout, rather than bundled in a Python wheel.
+Start the frontend in terminal 2:
 
-For frontend development, run the API in one terminal and `npm run dev` from
-`frontend/` in another. Vite serves port 5173 and proxies both HTTP and WebSocket
-requests under `/api` to port 8000. `python -m seimlai.web.app --help` lists
-custom configuration, host and port options. Rebuild after frontend changes
-when using the combined server on port 8000.
+```bash
+./open-seimlai frontend
+```
+
+The frontend installs its dependencies on first use and opens the **homepage** at
+**http://127.0.0.1:5173/**. Choose **Open workspace**, review the configuration,
+and use **Run full workflow** or the individual stage controls. HTTP requests and
+live progress go through Vite to the host scientific backend on port 8000.
+Keep both terminals open; press **Ctrl+C** in each to stop its service.
+Docker is only needed for the pipeline stages that use HypoEllipse/HypoDD,
+not to serve this interface. Errors and pipeline output appear in the backend terminal.
+
+If an older launch is still running, stop its host API before starting the new
+backend (port 8000 must be free). The launcher no longer starts background
+processes or uses PID/log files.
+`run_gui.sh` and `SeiMLAI_GUI.command` still launch the original NiceGUI interface.
+
+### Stopping and restarting
+
+1. Press **Ctrl+C** in the frontend terminal.
+2. Press **Ctrl+C** in the backend terminal.
+3. Restart with `./open-seimlai backend` and `./open-seimlai frontend` in separate
+   terminals.
+
+The obsolete Docker website has been removed. If a container from an older
+checkout still exists, stop it with `docker stop seimlai-web-1`. Docker remains
+required for the containerized scientific location stages.
+
+If startup reports that a port is already in use, identify its listener:
+
+```bash
+lsof -nP -iTCP:5173 -iTCP:8000 -iTCP:8001 -iTCP:8080 -sTCP:LISTEN
+```
+
+The new frontend uses 5173 and the backend uses 8000. Ports 8001 and 8080 may
+belong to older SeiMLAI launches. Stop a confirmed old SeiMLAI process in its
+terminal, or use `kill -TERM <PID>` with its actual PID from the output. An empty
+listing means these ports are free. Stopping services does not delete your
+configuration, case studies, or downloaded data.
+
+### Web interface file layout
+
+| Path | Responsibility |
+| --- | --- |
+| `open-seimlai` | Starts the backend or frontend from the repository directory. |
+| `frontend/src/main.tsx` | Routes between the homepage and workspace. |
+| `frontend/src/Landing.tsx`, `Landing.css` | Homepage content and animation. |
+| `frontend/src/Workspace.tsx` | Pipeline controls, configuration, and live progress. |
+| `frontend/src/SeismicMap.tsx` | Cesium catalog viewer and geographic selection. |
+| `frontend/src/api.ts` | HTTP client and shared frontend data types. |
+| `frontend/vite.config.ts` | Frontend development server and API/WebSocket proxy. |
+| `seimlai/web/app.py` | FastAPI endpoints and optional built-frontend serving. |
+| `seimlai/gui/services/` | Shared configuration, pipeline, and catalog services. |
+
+For a built frontend served directly by FastAPI, run `npm ci` and `npm run build`
+in `frontend/`, then start the backend and open **http://127.0.0.1:8000/**.
+Rebuild after frontend changes when using this alternative. The two-terminal
+startup above serves frontend changes immediately.
 
 The workspace includes the five processing stages, continuation/selection and
 utilities, case-study selection, all configuration sections, geographic bounds

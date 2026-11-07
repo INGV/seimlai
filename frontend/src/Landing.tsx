@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
+import "./Landing.css";
 
 export function Brand() {
   return (
@@ -11,310 +12,211 @@ export function Brand() {
   );
 }
 
-function EarthSection() {
-  const section = useRef<HTMLDivElement>(null);
+const repository = "https://github.com/INGV/seimlai";
+const logo = "/assets/homepage/logo.webp";
+const imageRoot = "/assets/homepage";
+
+// Source inventory: 300 + 300 + 120 + 10 frames, all 1920×1080.
+// Keep every part4 frame so the catalog reveal completes before the final hold.
+const animation = {
+  parts: [{ folder: "part1", start: 1, end: 300, skip: 2 }, { folder: "part2", start: 1, end: 300, skip: 2 }, { folder: "part3", start: 1, end: 120, skip: 2 }, { folder: "part4", start: 1, end: 10, skip: 1 }],
+  mobileFrameSkip: 2,
+  cacheSize: 12,
+  hold: 0.12,
+};
+const frames = animation.parts.flatMap(({ folder, start, end, skip }) =>
+  Array.from(new Set([...Array.from({ length: Math.ceil((end - start + 1) / skip) }, (_, i) => start + i * skip), end]))
+    .map(n => `${imageRoot}/${folder}/${String(n).padStart(3, "0")}.webp`),
+);
+const stages = [
+  { title: "Download data", description: "Acquire continuous seismic waveforms and station metadata for the selected region, time period, networks, and stations.", input: "Geographic bounds, dates, and station selection.", operation: "Retrieve waveform data and station information.", output: "The waveform archive and station metadata needed for processing.", tags: ["Waveform acquisition"], command: "download", range: [0, 120], theme: "light" },
+  { title: "Pick seismic phases", description: "Identify P- and S-wave arrivals using the configured deep-learning model available through SeisBench.", input: "Waveform data.", operation: "Identify seismic phase arrivals using the selected model and thresholds.", output: "P- and S-wave picks.", tags: ["SeisBench", "PhaseNet / EQTransformer, depending on configuration"], command: "phase-picking", range: [120, 201], theme: "light" },
+  { title: "Associate phases", description: "Associate seismic arrivals into earthquake events and build an initial catalog with GaMMA.", input: "Phase picks and station information.", operation: "Group arrivals into candidate earthquake events.", output: "The raw associated catalog.", tags: ["GaMMA"], command: "association", range: [201, 261], theme: "light" },
+  { title: "Locate earthquakes", description: "Prepare the location inputs, run HypoEllipse, and filter the resulting absolute earthquake locations.", input: "Associated events and configured location inputs.", operation: "Calculate absolute locations and apply the configured filtering.", output: "The filtered absolute-location catalog.", tags: ["HypoEllipse", "Docker"], command: "absolute-location", range: [261, 301], theme: "dark" },
+  { title: "Refine relative locations", description: "Prepare HypoDD inputs, generate cross-correlation differential times, and perform double-difference relative relocation.", input: "Prepared event and phase information, with waveforms used for cross-correlation.", operation: "Generate differential-time inputs and run the HypoDD relocation procedure.", output: "The final relatively relocated catalog.", tags: ["Cross-correlation", "HypoDD", "Docker"], command: "relative-relocation", range: [302, frames.length - 1], theme: "dark" },
+];
+const technologies = [
+  ["Python", "Workflow orchestration, command-line execution, and reusable processing modules.", "/assets/technology-logos/python-icon.svg"],
+  ["SeisBench", "Deep-learning models for seismic phase picking.", "/assets/technology-logos/seisbench-icon.svg"],
+  ["GaMMA", "Phase association and initial catalog generation."],
+  ["HypoEllipse", "Absolute earthquake location."],
+  ["HypoDD", "Double-difference relative relocation.", "/assets/technology-logos/hypodd-banner.png"],
+  ["PyGMT", "Scientific mapping and catalog visualization.", "/assets/technology-logos/pygmt-logo.svg"],
+  ["Docker", "Containerized execution of the location procedures.", "/assets/technology-logos/docker-icon.svg"],
+  ["Conda", "Management of the scientific software environment.", "/assets/technology-logos/conda-icon.svg"],
+];
+const authors = [
+  ["Rossella Fonzetti", "Corresponding author", "rossella.fonzetti@ingv.it", "Scientific collaborations", "/assets/authors/rossella-fonzetti.jpeg"],
+  ["Alessandro Crocetta", "Co-author", "alessandro.crocetta@ingv.it", "Questions and bug reports", "/assets/authors/alessandroCrocetta.png"],
+  ["Daniele Bailo", "Co-author", "daniele.bailo@ingv.it", "Contact", "/assets/authors/daniele-bailo.jpeg"],
+];
+const number = (i: number) => String(i + 1).padStart(2, "0");
+
+function Workflow() {
+  const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const [active, setActive] = useState(0);
+  const [complete, setComplete] = useState(false);
   useEffect(() => {
+    const parent = root.current!;
     const node = canvas.current!;
-    const parent = section.current!;
-    const context = node.getContext("2d");
-    if (!context) return;
-    let frame = 0;
+    const ctx = node.getContext("2d");
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-    // Deterministic, illustrative seismicity. The live map never uses these points.
-    const points = Array.from({ length: 130 }, (_, i) => ({
-      x: Math.sin(i * 127.1) * 0.62,
-      y: Math.cos(i * 311.7) * 0.28,
-      z: 0.06 + ((i * 37) % 101) / 125,
-      r: 1.2 + (i % 5) * 0.45,
-    }));
-    function draw() {
-      frame = 0;
-      const bounds = parent.getBoundingClientRect();
-      const width = node.clientWidth,
-        height = node.clientHeight;
-      const ratio = Math.min(devicePixelRatio, 2);
-      node.width = width * ratio;
-      node.height = height * ratio;
-      const ctx = context!;
-      ctx.scale(ratio, ratio);
-      const progress = reduced.matches
-        ? 0.65
-        : Math.max(0, Math.min(1, -bounds.top / (bounds.height - height)));
-      parent.style.setProperty("--reveal", String(progress));
-      const scale = Math.min(width * 0.67, height * 0.85);
-      const cx = width * (width > 800 ? 0.63 : 0.5),
-        cy = height * 0.48;
-      const project = (x: number, y: number, z: number) => [
-        cx + (x - y) * scale * 0.75,
-        cy + (x + y) * scale * 0.26 + z * scale * 0.63,
-      ];
-      ctx.clearRect(0, 0, width, height);
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, scale);
-      glow.addColorStop(0, "#154e6a38");
-      glow.addColorStop(1, "#070b1200");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, width, height);
-      for (let layer = 4; layer >= 0; layer--) {
-        const z = layer * (0.045 + progress * 0.07);
-        const corners = [
-          [-0.7, -0.5],
-          [0.7, -0.5],
-          [0.7, 0.5],
-          [-0.7, 0.5],
-        ].map(([x, y]) => project(x, y, z));
-        ctx.beginPath();
-        corners.forEach(([x, y], i) =>
-          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y),
-        );
-        ctx.closePath();
-        ctx.fillStyle =
-          layer === 0 ? "#102d38" : `rgba(18,42,58,${0.3 - layer * 0.035})`;
-        ctx.strokeStyle = layer === 0 ? "#5cafaab0" : "#3c647d55";
-        ctx.lineWidth = 1;
-        ctx.fill();
-        ctx.stroke();
-        if (layer === 0) {
-          for (let line = 0; line <= 24; line++) {
-            ctx.beginPath();
-            for (let j = 0; j <= 50; j++) {
-              const x = -0.7 + (j / 50) * 1.4,
-                y = -0.5 + line / 24;
-              const relief = Math.sin(x * 9 + y * 4) * Math.cos(y * 10) * 0.025;
-              const [px, py] = project(x, y, relief);
-              if (j === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            }
-            ctx.strokeStyle = "#75c8b638";
-            ctx.stroke();
-          }
+    const mobile = matchMedia("(max-width: 800px)");
+    const cache = new Map<number, ImageBitmap>();
+    const failed = new Set<number>();
+    const articles = Array.from(parent.querySelectorAll<HTMLElement>(".home-step"));
+    let desired = 0, displayed = -1, raf = 0, disposed = false, loading = false;
+    let request: AbortController | undefined;
+    function paint(index: number) {
+      const bitmap = cache.get(index);
+      if (!bitmap || !ctx) return;
+      ctx.drawImage(bitmap, 0, 0, node.width, node.height);
+      displayed = index;
+      node.style.opacity = "1";
+    }
+    async function loadNearby() {
+      if (loading || disposed || reduced.matches || !ctx) return;
+      const candidates = [desired, desired + 1, desired - 1, desired + 2, desired - 2];
+      const index = candidates.find(i => i >= 0 && i < frames.length && !cache.has(i) && !failed.has(i));
+      if (index === undefined) return;
+      loading = true;
+      request = new AbortController();
+      try {
+        const response = await fetch(mobile.matches ? frames[index].replace(imageRoot, `${imageRoot}/mobile`) : frames[index], { signal: request.signal });
+        if (!response.ok) throw new Error(`Frame ${response.status}`);
+        const bitmap = await createImageBitmap(await response.blob());
+        if (disposed || reduced.matches) { bitmap.close(); return; }
+        cache.set(index, bitmap);
+        if (index === desired || displayed < 0) paint(index);
+        while (cache.size > animation.cacheSize) {
+          const victim = [...cache.keys()].filter(i => i !== desired && i !== displayed)
+            .sort((a, b) => Math.abs(b - desired) - Math.abs(a - desired))[0];
+          cache.get(victim)!.close();
+          cache.delete(victim);
         }
-      }
-      points.forEach((p, i) => {
-        const [x, y] = project(p.x, p.y, p.z * (0.08 + progress * 0.62));
-        ctx.globalAlpha = 0.35 + progress * 0.65;
-        ctx.fillStyle = ["#f2b46d", "#ec8571", "#ac9bff", "#6bd8c3"][i % 4];
-        ctx.shadowColor = ctx.fillStyle;
-        ctx.shadowBlur = 9;
-        ctx.beginPath();
-        ctx.arc(x, y, p.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-      for (const [x, y] of [
-        [-0.5, -0.2],
-        [0.4, -0.3],
-        [0.15, 0.35],
-      ]) {
-        const [px, py] = project(x, y, -0.025);
-        ctx.fillStyle = "#b8ece2";
-        ctx.beginPath();
-        ctx.moveTo(px, py - 7);
-        ctx.lineTo(px - 5, py + 3);
-        ctx.lineTo(px + 5, py + 3);
-        ctx.closePath();
-        ctx.fill();
+      } catch (error) {
+        // Retain the last valid canvas or static image when an asset cannot load.
+        if (!(error instanceof DOMException && error.name === "AbortError")) failed.add(index);
+      } finally {
+        loading = false;
+        if (!disposed) void loadNearby();
       }
     }
-    function schedule() {
-      if (!frame) frame = requestAnimationFrame(draw);
+    function update() {
+      raf = 0;
+      const anchor = innerHeight * 0.4;
+      let index = 0;
+      articles.forEach((article, i) => { if (article.getBoundingClientRect().top <= anchor) index = i; });
+      const bounds = articles[index].getBoundingClientRect();
+      const progress = Math.max(0, Math.min(1, (anchor - bounds.top) / bounds.height));
+      const [start, end] = stages[index].range;
+      desired = Math.round(start + (end - start) * Math.min(1, progress / (1 - animation.hold)));
+      if (mobile.matches && desired < frames.length - animation.parts[3].end) {
+        desired -= desired % animation.mobileFrameSkip;
+      }
+      setActive(index);
+      setComplete(index === stages.length - 1 && progress >= 1 - animation.hold);
+      if (reduced.matches) {
+        node.style.opacity = "0";
+        request?.abort();
+        cache.forEach(bitmap => bitmap.close());
+        cache.clear();
+        displayed = -1;
+        return;
+      }
+      if (parent.getBoundingClientRect().bottom < 0 || parent.getBoundingClientRect().top > innerHeight) return;
+      paint(desired);
+      void loadNearby();
     }
-    const observer = new ResizeObserver(schedule);
-    observer.observe(node);
+    function schedule() { if (!raf) raf = requestAnimationFrame(update); }
     addEventListener("scroll", schedule, { passive: true });
+    addEventListener("resize", schedule);
     reduced.addEventListener("change", schedule);
+    mobile.addEventListener("change", schedule);
     schedule();
     return () => {
-      observer.disconnect();
+      disposed = true;
+      request?.abort();
+      cancelAnimationFrame(raf);
+      cache.forEach(bitmap => bitmap.close());
       removeEventListener("scroll", schedule);
+      removeEventListener("resize", schedule);
       reduced.removeEventListener("change", schedule);
-      cancelAnimationFrame(frame);
+      mobile.removeEventListener("change", schedule);
     };
   }, []);
-  return (
-    <div ref={section} className="earth-story" id="explore">
-      <div className="earth-sticky">
-        <canvas
-          ref={canvas}
-          aria-label="Illustrative Earth cross-section revealing earthquake hypocenters during scroll"
-          role="img"
-        />
-        <div className="earth-caption">
-          <span className="eyebrow">02 / A DIFFERENT PERSPECTIVE</span>
-          <h2>
-            Go beneath
-            <br />
-            the surface.
-          </h2>
-          <p>
-            A map tells you where.
-            <br />
-            Depth reveals the structure.
-          </p>
-          <span className="technical">SURFACE → HYPOCENTERS → STRUCTURE</span>
+  return <div className="home-workflow" ref={root} data-theme={stages[active].theme}>
+    <div className="home-workflow-controls" data-theme={stages[active].theme}>
+      <nav className="home-step-nav" aria-label="Workflow stages">
+        {stages.map((stage, i) => <a key={stage.command} href={`#step-${i + 1}`} aria-label={`${number(i)} — ${stage.title}`} aria-current={i === active ? "step" : undefined}>{number(i)}</a>)}
+      </nav>
+      <p className="home-caption">Illustrative sequence · not scientific observations.<br />Explore actual catalog data in the workspace’s Cesium map.</p>
+    </div>
+    <div className="home-visual-column">
+      <div className="home-visual" data-theme={stages[active].theme}>
+        <div className="home-visual-label"><span>FROM SIGNAL TO STRUCTURE</span><span>{number(active)} / 05</span></div>
+        <div className="home-sequence">
+          <img src={complete ? `${imageRoot}/catalog.webp` : `${imageRoot}/step-${active + 1}.webp`} alt="Illustrative seismic terrain progressing from waveforms to an earthquake catalog" width="768" height="432" />
+          <canvas ref={canvas} width="1280" height="720" aria-hidden="true" />
         </div>
-        <span className="illustration-label">
-          CONCEPTUAL VISUALIZATION · NOT OBSERVATIONAL DATA
-        </span>
-        <span className="depth-label">
-          Z / DEPTH
-          <br />
-          <b>↓</b>
-        </span>
+
       </div>
     </div>
-  );
+    <div className="home-steps" id="workflow-content">
+      {stages.map((stage, i) => <article className="home-step" id={`step-${i + 1}`} key={stage.command} data-theme={stage.theme}>
+        <span className="home-kicker">{number(i)} / WORKFLOW</span>
+        <h3>{stage.title}</h3><p className="home-step-description">{stage.description}</p>
+        <dl>{[["Input", stage.input], ["Operation", stage.operation], ["Output", stage.output]].map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl>
+        <div className="home-tags">{stage.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
+        <code className="home-command">python main.py {stage.command}</code>
+      </article>)}
+      <div className="home-catalog" data-theme="dark">
+        <span className="home-kicker">THE RESULT</span>
+        <h3>Your earthquake catalog.</h3>
+        <p>From continuous waveforms to the final relatively relocated catalog. Explore the resulting earthquake locations in the operational workspace.</p>
+        <a className="home-button" href="/app">Explore your catalog ↗</a>
+      </div>
+    </div>
+  </div>;
 }
 
 export function Landing({ onEnter }: { onEnter: () => void }) {
-  return (
-    <div className="landing">
-      <header className="landing-nav">
-        <a href="#" aria-label="SeiMLAI home">
-          <Brand />
-        </a>
-        <nav aria-label="Overview">
-          <a href="#workflow">Workflow</a>
-          <a href="#explore">Explore in depth</a>
-        </nav>
-        <button className="button small" onClick={onEnter}>
-          Open workspace <span>↗</span>
-        </button>
-      </header>
-      <main>
-        <section className="hero">
-          <div className="hero-grid" aria-hidden="true" />
-          <div className="hero-topline">
-            <span className="eyebrow">
-              <i className="status-dot" /> SEISMIC MACHINE LEARNING WORKFLOW
-            </span>
-            <span className="technical">SIGNAL / LOCATION / STRUCTURE</span>
-          </div>
-          <div className="hero-copy">
-            <p className="overline">Listen deeper.</p>
-            <h1>
-              Every signal.
-              <br />A deeper <em>story.</em>
-            </h1>
-            <p className="hero-description">
-              From the first arrival to the final hypocenter.
-              <br />
-              One workspace for your seismic catalog.
-            </p>
-            <div className="hero-actions">
-              <button className="button" onClick={onEnter}>
-                Launch SeiMLAI <span>↗</span>
-              </button>
-              <a className="text-link" href="#workflow">
-                Discover the workflow <span>↓</span>
-              </a>
-            </div>
-          </div>
-          <div className="signal-art" aria-hidden="true">
-            <svg viewBox="0 0 1000 220" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="signal">
-                  <stop stopColor="#65d9c2" stopOpacity="0" />
-                  <stop offset=".4" stopColor="#65d9c2" />
-                  <stop offset="1" stopColor="#65d9c2" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {[0, 1, 2].map((row) => (
-                <path
-                  key={row}
-                  transform={`translate(0 ${row * 25})`}
-                  d={`M0 85 ${Array.from({ length: 500 }, (_, i) => {
-                    const x = i * 2;
-                    const envelope = Math.exp(-Math.pow((x - 580) / 120, 2));
-                    return `L${x} ${85 + Math.sin(i * 2.1 + row) * Math.cos(i * 0.31) * envelope * 66}`;
-                  }).join(" ")}`}
-                />
-              ))}
-            </svg>
-            <div className="signal-scale">
-              <span>CONTINUOUS WAVEFORM</span>
-              <span>TIME →</span>
-            </div>
-          </div>
-          <div className="hero-footer">
-            <span>BUILT FOR SEISMOLOGY</span>
-            <span>SCROLL TO EXPLORE ↓</span>
-            <span>SeiMLAI / RESEARCH WORKSPACE</span>
-          </div>
-        </section>
-        <section className="workflow-section" id="workflow">
-          <div className="section-heading">
-            <span className="eyebrow">01 / FROM WAVEFORMS TO CATALOGS</span>
-            <h2>
-              Complex science.
-              <br />
-              <span>A connected workflow.</span>
-            </h2>
-            <p>
-              Configure your study, follow each processing stage, and inspect
-              the resulting seismicity in three dimensions.
-            </p>
-          </div>
-          <div className="workflow-line">
-            {[
-              [
-                "01",
-                "Acquire",
-                "Download waveforms and station metadata from FDSN services.",
-              ],
-              [
-                "02",
-                "Detect",
-                "Identify phase arrivals with PhaseNet or EQTransformer.",
-              ],
-              [
-                "03",
-                "Associate",
-                "Connect arrivals into earthquake events with GaMMA.",
-              ],
-              [
-                "04",
-                "Locate",
-                "Estimate absolute hypocenters with HypoEllipse.",
-              ],
-              [
-                "05",
-                "Refine",
-                "Resolve relative locations with cross-correlation and HypoDD.",
-              ],
-            ].map(([n, title, text]) => (
-              <article key={n}>
-                <span className="stage-number">{n}</span>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-        <EarthSection />
-        <section className="closing">
-          <span className="eyebrow">03 / YOUR NEXT CASE STUDY</span>
-          <h2>
-            Bring your data.
-            <br />
-            <em>Find the structure.</em>
-          </h2>
-          <p>
-            Configuration, processing, live logs, and 3D exploration.
-            <br />
-            Your research, in one place.
-          </p>
-          <button className="button" onClick={onEnter}>
-            Enter the workspace <span>↗</span>
-          </button>
-        </section>
-      </main>
-      <footer className="landing-footer">
-        <Brand />
-        <span>High-resolution seismic catalog workflow</span>
-        <span>SEISMOLOGY × MACHINE LEARNING</span>
-      </footer>
-    </div>
-  );
+  function enter(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onEnter(); }
+  }
+  return <div className="seimlai-home">
+    <a className="home-skip" href="#workflow-content">Skip to workflow content</a>
+    <header className="home-nav">
+      <a href="#overview" aria-label="SeiMLAI overview"><img src={logo} alt="SeiMLAI" width="132" height="48" /></a>
+      <nav aria-label="Main navigation">{[["overview", "Overview"], ["workflow", "Workflow"], ["technologies", "Technologies"], ["team", "Team"], ["get-started", "Get started"]].map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}</nav>
+      <a className="home-button home-nav-action" href="/app" onClick={enter}>Open workspace <span aria-hidden="true">↗</span></a>
+    </header>
+    <main>
+      <section className="home-overview home-wrap" id="overview">
+        <div className="home-hero-copy"><h1><img className="home-hero-logo" src={logo} alt="SeiMLAI" width="1746" height="901" fetchPriority="high" /></h1>
+          <p className="home-headline">From continuous waveforms to high-resolution earthquake catalogs.</p>
+          <p className="home-intro">A modular Python workflow that connects seismic data acquisition, machine-learning phase picking, event association, earthquake location, and relative relocation.</p>
+          <div className="home-actions"><a className="home-button" href="/app" onClick={enter}>Open workspace ↗</a><a className="home-text-link" href="#workflow">Explore the workflow ↓</a></div>
+          <a className="home-repository" href={repository}>View on GitHub ↗</a>
+        </div>
+        <div className="home-overview-footer"><span>SEIsmic catalog for Machine Learning And Imaging</span><span>Developed at INGV · Rome, Italy</span></div>
+      </section>
+      <section className="home-workflow-section" id="workflow">
+        <div className="home-wrap"><div className="home-section-heading"><span className="home-kicker">THE WORKFLOW</span><h2>Five stages.<br /><span>One connected catalog.</span></h2><p>Follow the path from waveform acquisition to relative relocation. Run it end to end, or select the stages your study needs.</p></div></div>
+        <Workflow />
+        <p className="home-supporting home-wrap">Pre-processing, quality control, plotting, and diagnostics support the workflow. They are not additional numbered stages. Phase picking supports pretrained or custom models through the project configuration.</p>
+      </section>
+      <section className="home-technologies" id="technologies"><div className="home-wrap">
+        <div className="home-section-heading"><span className="home-kicker">TECHNOLOGIES & REQUIREMENTS</span><h2>Built on established<br />scientific tools.</h2><p>Specialist methods, connected through a modular Python workflow.</p></div>
+        <div className="home-tools">{technologies.map(([name, text, image]) => <article key={name}>{image ? <img className="home-tool-logo" src={image} alt={`${name} logo`} /> : <div className="home-tool-logo" aria-hidden="true">{name.slice(0, 2)}</div>}<h3>{name}</h3><p>{text}</p></article>)}</div>
+        <div className="home-requirements"><div><span className="home-kicker">SCIENTIFIC WORKFLOW</span><h3>What is required to run SeiMLAI?</h3><ul><li>The Python environment defined in <code>environment.yml</code>.</li><li>The Conda environment named <code>catalog</code>.</li><li>Project settings in <code>user_configuration/config.yaml</code>.</li><li>Docker for the containerized location stages.</li><li>Access to configured data services when downloading waveforms.</li></ul><p>Use the repository’s environment and dependency files for exact versions. GPU acceleration for phase picking and HPC execution are optional; a GPU is not a universal requirement.</p></div>
+          <div><span className="home-kicker">INDEPENDENT WEB INTERFACE</span><h3>A workspace in your browser.</h3><p>The React/Vite frontend connects to FastAPI over HTTP and WebSocket, with Cesium for 3D catalog exploration.</p><ul><li>Node.js 22.12+ or 24 for frontend installation, builds, and development.</li><li>FastAPI and Uvicorn provide the Python web server.</li><li>FastAPI serves the built frontend. Node.js is not needed simply to serve it.</li></ul><details><summary>Web interface setup</summary><pre><code>{"python -m pip install 'fastapi>=0.115,<1' 'uvicorn[standard]>=0.30,<1'\ncd frontend\nnpm ci\nnpm run build\ncd ..\npython -m seimlai.web.app"}</code></pre><a className="home-text-link" href={`${repository}#independent-web-interface-react--fastapi`}>Read the web interface documentation ↗</a></details></div></div>
+        <h3 className="home-interface-title">Choose how you work.</h3><div className="home-interfaces">{[["Command line", "Run the full pipeline, select individual stages, or continue an existing workflow."], ["Python modules", "Reuse processing stages in scripts, notebooks, and custom applications."], ["NiceGUI", "Use the original graphical interface launched with python main.py --gui."], ["Independent web interface", "Use the React/Vite frontend with the FastAPI backend and the Cesium map in the operational workspace."]].map(([name, text]) => <article key={name}><h4>{name}</h4><p>{text}</p></article>)}</div>
+      </div></section>
+      <section className="home-wrap home-team" id="team"><div className="home-section-heading"><span className="home-kicker">THE TEAM</span><h2>The people behind SeiMLAI.</h2></div><div className="home-authors">{authors.map(([name, role, email, purpose, image]) => <article key={email}><img className="home-author-photo" src={image} alt={`${name} portrait`} /><span className="home-kicker">{role}</span><h3>{name}</h3><p>Istituto Nazionale di Geofisica e Vulcanologia (INGV), Rome, Italy</p><div><span>{purpose}</span><a href={`mailto:${email}`}>{email} ↗</a></div></article>)}</div></section>
+      <section className="home-start" id="get-started"><div className="home-wrap home-start-grid"><div><span className="home-kicker">GET STARTED</span><h2>Run your first workflow.</h2><p>Create the scientific environment, choose your configuration, and launch the pipeline.</p><div className="home-actions"><a className="home-button" href="/app" onClick={enter}>Open workspace ↗</a><a className="home-text-link" href={`${repository}#installation--quickstart`}>Installation documentation ↗</a></div></div><div><pre><code>{"conda env update -f environment.yml\nconda activate catalog\npython main.py --help\npython main.py --config user_configuration/config.yaml"}</code></pre><p>Run the complete workflow or select individual processing stages.</p><a className="home-text-link" href={repository}>SeiMLAI repository ↗</a></div></div></section>
+    </main>
+    <footer className="home-wrap home-footer"><img src={logo} alt="SeiMLAI" width="132" height="48" /><p>Licensed under the <a href={`${repository}/blob/HEAD/LICENSE`}>GNU Affero General Public License v3.0</a>.<br />Third-party software, data services, waveform data, station metadata, and external images retain their respective licenses and terms.</p><a href="#overview">Back to top ↑</a></footer>
+  </div>;
 }
