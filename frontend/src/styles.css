@@ -1042,6 +1042,61 @@ fieldset {
   gap: 5px;
   align-items: center;
 }
+.underground-map {
+  position: absolute;
+  right: 16px;
+  bottom: 44px;
+  width: 240px;
+  overflow: hidden;
+}
+.underground-map-title {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+.underground-map-body {
+  position: relative;
+  height: 180px;
+}
+.underground-camera {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.underground-camera svg {
+  display: block;
+}
+.underground-camera span {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38bdf8;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+.has-underground-map .map-legend {
+  max-width: calc(100% - 288px);
+}
+@media (max-width: 900px) {
+  .underground-map {
+    right: 9px;
+    bottom: 152px;
+    width: 180px;
+  }
+  .underground-map-body {
+    height: 140px;
+  }
+  .has-underground-map .map-legend {
+    max-width: calc(100% - 18px);
+  }
+}
 .map-legend i {
   width: 7px;
   height: 7px;

@@ -156,9 +156,9 @@ function Workflow() {
     <div className="home-visual-column">
       <div className="home-visual" data-theme={stages[active].theme}>
         <div className="home-visual-label"><span>FROM SIGNAL TO STRUCTURE</span><span>{number(active)} / 05</span></div>
-        <div className="home-sequence">
+        <div className="home-sequence" style={{ filter: "brightness(1.15) contrast(1.06)" }}>
           <img src={complete ? `${imageRoot}/catalog.webp` : `${imageRoot}/step-${active + 1}.webp`} alt="Illustrative seismic terrain progressing from waveforms to an earthquake catalog" width="768" height="432" />
-          <canvas ref={canvas} width="1280" height="720" aria-hidden="true" />
+          <canvas ref={canvas} width="1920" height="1080" aria-hidden="true" />
         </div>
 
       </div>

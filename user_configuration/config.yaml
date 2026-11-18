@@ -1,6 +1,6 @@
 case_study:
   name: norcia #name of the case study folder
-  personal_folder: null # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
+  personal_folder: /Users/alessandrocrocetta/Desktop/Tirocinio/SeiMLAI/case_studies/norcia # if waveform metadata is stored in a personal folder, specify its path; otherwise use null
   download_data: true # if you want to download the data put true, otherwise put false
 
 geography: #specify the area limits
